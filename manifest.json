@@ -1,0 +1,24 @@
+{
+  "name": "涓汉璁拌处",
+  "short_name": "璁拌处",
+  "description": "涓汉璁拌处宸ュ叿 - 棰勭畻绠＄悊銆佹敮鍑鸿褰曘€佹秷璐归娴?,
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F5F7F5",
+  "theme_color": "#10B981",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "./icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}
