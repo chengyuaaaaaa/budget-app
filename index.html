@@ -1,0 +1,1881 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#10B981">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="涓汉璁拌处">
+<link rel="manifest" href="./manifest.json">
+<link rel="apple-touch-icon" href="./icon.svg">
+<link rel="icon" href="./icon.svg">
+<title>璁拌处宸ュ叿 - 鍘熷瀷 v1.0</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        primary: '#10B981',
+        'primary-light': '#34D399',
+        'primary-dark': '#059669',
+        'primary-bg': '#ECFDF5',
+        accent: '#06B6D4',
+        bg: '#F5F7F5',
+        card: '#FFFFFF',
+        muted: '#9CA3AF',
+      }
+    }
+  }
+}
+</script>
+<style>
+  * { -webkit-tap-highlight-color: transparent; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Helvetica Neue', sans-serif; background: #F5F7F5; }
+  .page { display: none; }
+  .page.active { display: block; }
+  .tab-bar { position: fixed; bottom: 0; left: 0; right: 0; z-index: 50; background: #fff; border-top: 1px solid #E5E7EB; padding-bottom: env(safe-area-inset-bottom); width: 100%; }
+  .fab { position: fixed; bottom: 90px; right: 20px; z-index: 40; width: 56px; height: 56px; border-radius: 28px; background: linear-gradient(135deg, #10B981, #34D399); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 28px; box-shadow: 0 4px 16px rgba(16,185,129,0.4); cursor: pointer; transition: transform 0.2s; }
+  .fab:active { transform: scale(0.92); }
+  .modal-overlay { display: none; position: fixed; inset: 0; z-index: 100; background: rgba(0,0,0,0.45); align-items: flex-end; justify-content: center; }
+  .modal-overlay.show { display: flex; }
+  .modal-sheet { background: #fff; border-radius: 20px 20px 0 0; width: 100%; max-width: 480px; max-height: 85vh; overflow-y: auto; padding: 20px 20px 30px; animation: slideUp 0.25s ease; }
+  @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+  .toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 200; background: #1F2937; color: #fff; padding: 12px 24px; border-radius: 24px; font-size: 14px; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
+  .toast.show { opacity: 1; }
+  .warning-banner { background: linear-gradient(135deg, #F59E0B, #F97316); color: #fff; padding: 14px 18px; border-radius: 12px; display: none; }
+  .warning-banner.show { display: block; }
+  input, select, textarea { outline: none; }
+  input:focus, select:focus, textarea:focus { border-color: #10B981 !important; }
+  ::-webkit-scrollbar { width: 0; }
+  .content-area { padding-bottom: 110px; }
+  .cat-chip { transition: all 0.15s; }
+  .cat-chip:active { transform: scale(0.95); }
+  /* Focus mode */
+  body.focus-mode .focus-disabled { pointer-events: none; opacity: 0.3; }
+  body.focus-mode .focus-overlay { display: block; position: fixed; inset: 0; z-index: 300; background: rgba(245,247,245,0.7); pointer-events: none; }
+  .focus-overlay { display: none; }
+</style>
+</head>
+<body>
+
+<div class="toast" id="toast"></div>
+<div class="focus-overlay"></div>
+
+<!-- ==================== PAGE: 棣栭〉浠〃鐩?==================== -->
+<div class="page active" id="page-home" style="max-width:480px;margin:0 auto;min-height:100vh;">
+  <div class="px-5 pt-12 content-area">
+    <div class="flex items-center justify-between mb-5">
+      <div>
+        <h1 class="text-xl font-bold text-gray-800">鏈湀璐﹀崟</h1>
+        <p class="text-sm text-gray-400 mt-0.5" id="home-month-label">2026骞?鏈?/p>
+      </div>
+      <div class="flex gap-2">
+        <button onclick="switchMonth(-1)" class="w-9 h-9 rounded-full bg-white flex items-center justify-center text-gray-500 shadow-sm hover:shadow transition-shadow text-sm">&lt;</button>
+        <button onclick="switchMonth(1)" class="w-9 h-9 rounded-full bg-white flex items-center justify-center text-gray-500 shadow-sm hover:shadow transition-shadow text-sm">&gt;</button>
+      </div>
+    </div>
+
+    <!-- 棰勭畻杩涘害鍗＄墖 -->
+    <div class="bg-white rounded-2xl p-5 mb-4 shadow-sm" id="budget-card">
+      <div class="flex items-center justify-between mb-3">
+        <span class="text-sm font-medium text-gray-500">鏈湀棰勭畻</span>
+        <div class="flex items-center gap-2">
+          <span class="text-xs text-gray-400" id="home-budget-label">鍓╀綑 楼3,500.00</span>
+          <button onclick="openBudgetForMonth(viewingMonth)" class="text-xs text-primary font-medium hover:text-primary-dark">淇敼</button>
+        </div>
+      </div>
+      <div class="flex items-center gap-5">
+        <div class="relative" style="width:100px;height:100px;">
+          <svg width="100" height="100" viewBox="0 0 100 100">
+            <circle cx="50" cy="50" r="42" fill="none" stroke="#E5E7EB" stroke-width="10"/>
+            <circle cx="50" cy="50" r="42" fill="none" stroke="url(#pg)" stroke-width="10" stroke-linecap="round" class="progress-ring" id="progress-circle" stroke-dasharray="264" stroke-dashoffset="72"/>
+            <defs><linearGradient id="pg" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#10B981"/><stop offset="100%" stop-color="#34D399"/></linearGradient></defs>
+          </svg>
+          <div class="absolute inset-0 flex flex-col items-center justify-center">
+            <span class="text-lg font-bold text-gray-800" id="home-spent">楼6,500</span>
+            <span class="text-xs text-gray-400" id="home-total-budget">/ 楼10,000</span>
+          </div>
+        </div>
+        <div class="flex-1 space-y-3">
+          <div class="flex justify-between text-sm"><span class="text-gray-500">宸茶姳璐?/span><span class="font-semibold" id="home-spent-text">楼6,500.00</span></div>
+          <div class="flex justify-between text-sm"><span class="text-gray-500">鍓╀綑</span><span class="font-semibold text-primary-dark" id="home-remaining">楼3,500.00</span></div>
+          <div class="flex justify-between text-sm"><span class="text-gray-500">绗旀暟</span><span class="font-semibold" id="home-tx-count">鍏?7绗?/span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 瓒呮敮璀﹀憡 -->
+    <div class="warning-banner mb-4" id="warning-banner">
+      <div class="flex items-center gap-2"><span class="text-lg">鈿狅笍</span><span class="font-semibold">棰勭畻宸蹭娇鐢?<span id="warning-percent">85%</span></span></div>
+      <p class="text-sm mt-1 opacity-90" id="warning-text"></p>
+    </div>
+
+    <!-- 绌虹姸鎬侊細鏃犻绠?-->
+    <div class="bg-white rounded-2xl p-8 mb-4 shadow-sm text-center hidden" id="home-empty-budget">
+      <div class="text-5xl mb-3">馃搵</div>
+      <p class="text-gray-500 mb-4">杩樻病鏈夎瀹氭湰鏈堥绠?/p>
+      <button onclick="openBudgetForMonth(viewingMonth)" class="bg-primary text-white px-6 py-2.5 rounded-full text-sm font-medium hover:bg-primary-dark">椹笂璁惧畾</button>
+    </div>
+
+    <!-- 鍒嗙被楗煎浘 -->
+    <div class="bg-white rounded-2xl p-5 mb-4 shadow-sm" id="pie-section">
+      <h3 class="text-sm font-semibold text-gray-700 mb-3">璐﹀崟鍒嗙被</h3>
+      <div class="flex items-center gap-4">
+        <div style="width:140px;height:140px;flex-shrink:0;">
+          <canvas id="pie-canvas" width="140" height="140"></canvas>
+        </div>
+        <div class="flex-1 space-y-2 text-xs" id="pie-legend">
+        </div>
+      </div>
+    </div>
+
+    <!-- 绌虹姸鎬侊細鏃犳秷璐硅褰?-->
+    <div class="bg-white rounded-2xl p-8 mb-4 shadow-sm text-center hidden" id="home-empty-records">
+      <div class="text-5xl mb-3">馃摑</div>
+      <p class="text-gray-500 mb-4">杩樻病鏈夋秷璐硅褰?/p>
+      <button onclick="switchTab('record')" class="bg-primary text-white px-6 py-2.5 rounded-full text-sm font-medium hover:bg-primary-dark">璁扮涓€绗?/button>
+    </div>
+
+    <!-- 鏈€杩戞秷璐?-->
+    <div class="bg-white rounded-2xl p-5 shadow-sm" id="recent-section">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="text-sm font-semibold text-gray-700">鏈€杩戣处鍗?/h3>
+        <span class="text-xs text-primary font-medium cursor-pointer hover:text-primary-dark" onclick="switchTab('history')">鏌ョ湅鍏ㄩ儴 鈫?/span>
+      </div>
+      <div class="space-y-2" id="recent-list"></div>
+    </div>
+  </div>
+  <!-- FAB -->
+  <div class="fab" onclick="switchTab('record')" id="fab-btn">+</div>
+</div>
+
+<!-- ==================== PAGE: 璁拌处椤?==================== -->
+<div class="page" id="page-record" style="max-width:480px;margin:0 auto;min-height:100vh;">
+  <div class="px-5 pt-12 content-area">
+    <div class="flex items-center justify-between mb-5">
+      <div class="flex items-center gap-3">
+        <button onclick="switchTab('home')" class="text-gray-400 text-lg">&larr;</button>
+        <h1 class="text-xl font-bold text-gray-800">璁颁竴绗?/h1>
+      </div>
+      <div class="flex bg-gray-100 rounded-full p-1">
+        <button class="px-4 py-1.5 rounded-full text-sm font-medium transition-all" id="mode-single-btn" onclick="setRecordMode('single')" style="background:#fff;color:#10B981;">鍗曠瑪</button>
+        <button class="px-4 py-1.5 rounded-full text-sm font-medium transition-all" id="mode-batch-btn" onclick="setRecordMode('batch')" style="background:transparent;color:#888;">鎵归噺</button>
+      </div>
+    </div>
+    <div id="single-mode">
+      <div class="bg-white rounded-2xl p-5 shadow-sm space-y-4">
+        <div>
+          <label class="text-xs text-gray-400 mb-1 block">閲戦</label>
+          <div class="flex items-center border-b-2 border-gray-100 focus-within:border-primary transition-colors pb-2">
+            <span class="text-2xl font-bold text-gray-800 mr-1">楼</span>
+            <input type="number" id="single-amount" placeholder="0.00" class="flex-1 text-2xl font-bold text-gray-800 bg-transparent" step="0.01" min="0.01">
+          </div>
+        </div>
+        <div>
+          <label class="text-xs text-gray-400 mb-1 block">鍒嗙被</label>
+          <div class="flex flex-wrap gap-2" id="single-category-chips"></div>
+        </div>
+        <div>
+          <label class="text-xs text-gray-400 mb-1 block">鏃ユ湡</label>
+          <input type="date" id="single-date" class="w-full bg-gray-50 rounded-xl px-4 py-3 text-sm border-none">
+        </div>
+        <div>
+          <label class="text-xs text-gray-400 mb-1 block">澶囨敞锛堥€夊～锛?/label>
+          <input type="text" id="single-note" placeholder="渚嬪锛氬崍楗鍗? class="w-full bg-gray-50 rounded-xl px-4 py-3 text-sm border-none">
+        </div>
+        <button onclick="saveSingleRecord()" class="w-full bg-primary text-white py-3.5 rounded-2xl font-semibold text-sm hover:bg-primary-dark transition-colors">淇濆瓨</button>
+      </div>
+    </div>
+    <div id="batch-mode" class="hidden">
+      <div class="bg-white rounded-2xl p-5 shadow-sm">
+        <div class="space-y-3" id="batch-rows"></div>
+        <button onclick="addBatchRow()" class="w-full mt-3 py-3 border-2 border-dashed border-gray-200 rounded-xl text-gray-400 text-sm font-medium hover:border-primary hover:text-primary transition-colors">+ 娣诲姞涓€琛?/button>
+        <button onclick="saveBatchRecords()" class="w-full mt-4 bg-primary text-white py-3.5 rounded-2xl font-semibold text-sm hover:bg-primary-dark">鎵归噺淇濆瓨</button>
+      </div>
+    </div>
+    <div class="bg-white rounded-2xl p-8 shadow-sm text-center hidden mt-4" id="record-success">
+      <div class="text-6xl mb-3">鉁?/div>
+      <p class="text-lg font-semibold text-gray-800 mb-1">璁板綍鎴愬姛</p>
+      <p class="text-sm text-gray-400 mb-4" id="record-success-msg"></p>
+      <div class="flex gap-3 justify-center">
+        <button onclick="hideSuccess()" class="px-6 py-2.5 bg-gray-100 rounded-full text-sm font-medium text-gray-600">缁х画璁?/button>
+        <button onclick="switchTab('home');hideSuccess()" class="px-6 py-2.5 bg-primary text-white rounded-full text-sm font-medium">鍥為椤?/button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== PAGE: 棰勬祴椤?==================== -->
+<div class="page" id="page-predict" style="max-width:480px;margin:0 auto;min-height:100vh;">
+  <div class="px-5 pt-12 content-area">
+    <h1 class="text-xl font-bold text-gray-800 mb-1">娑堣垂棰勬祴</h1>
+    <p class="text-sm text-gray-400 mb-5" id="predict-subtitle">鍩轰簬杩?涓湀鏁版嵁棰勬祴涓嬫湀鏀嚭</p>
+    <div class="bg-white rounded-2xl p-8 shadow-sm text-center hidden" id="predict-empty">
+      <div class="text-5xl mb-3">馃敭</div>
+      <p class="text-gray-500 mb-2">鏁版嵁涓嶈冻锛屾棤娉曢娴?/p>
+      <p class="text-sm text-gray-400">鑷冲皯闇€瑕佷竴涓畬鏁存湀浠界殑娑堣垂璁板綍</p>
+    </div>
+    <div id="predict-content">
+      <div class="bg-gradient-to-br from-primary to-primary-light rounded-2xl p-6 mb-4 text-white shadow-sm">
+        <p class="text-sm opacity-80 mb-1" id="predict-month-label">棰勮2026骞?鏈堟€绘敮鍑?/p>
+        <p class="text-4xl font-bold mb-2" id="predict-total">楼9,200</p>
+        <div class="flex items-center gap-2 text-sm opacity-80"><span id="predict-trend">杈冭繎3鏈堝潎鍊?鈫?2%</span></div>
+      </div>
+      <div class="bg-white rounded-2xl p-5 mb-4 shadow-sm">
+        <h3 class="text-sm font-semibold text-gray-700 mb-4">鍚勫垎绫婚娴嬫槑缁?/h3>
+        <div class="space-y-4" id="predict-categories"></div>
+      </div>
+      <div class="bg-white rounded-2xl p-5 mb-4 shadow-sm">
+        <h3 class="text-sm font-semibold text-gray-700 mb-3">馃挕 娑堣垂寤鸿</h3>
+        <div class="space-y-3" id="predict-suggestions"></div>
+        <div class="hidden text-center py-6 text-gray-400 text-sm" id="predict-no-suggestions">鏆傛棤鐗瑰埆寤鸿锛屾秷璐硅妭濂忚壇濂?/div>
+      </div>
+      <div class="bg-white rounded-2xl p-5 mb-4 shadow-sm">
+        <h3 class="text-sm font-semibold text-gray-700 mb-3">馃攧 鍛ㄦ湡鎬ф秷璐规彁閱?/h3>
+        <div class="space-y-3" id="predict-cycles"></div>
+        <div class="hidden text-center py-6 text-gray-400 text-sm" id="predict-no-cycles">鏈娴嬪埌鏄庢樉鐨勫懆鏈熸€ф秷璐规ā寮?/div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== PAGE: 瀵煎叆椤?==================== -->
+<div class="page" id="page-import" style="max-width:480px;margin:0 auto;min-height:100vh;">
+  <div class="px-5 pt-12 content-area">
+    <h1 class="text-xl font-bold text-gray-800 mb-1">瀵煎叆璐﹀崟</h1>
+    <p class="text-sm text-gray-400 mb-5">鏀寔寰俊/鏀粯瀹濆鍑虹殑 CSV 鍙?Excel 鏂囦欢</p>
+    <div class="bg-white rounded-2xl p-8 shadow-sm text-center mb-4" id="import-upload-area">
+      <div class="text-6xl mb-3">馃搫</div>
+      <p class="text-gray-700 font-medium mb-1">閫夋嫨璐﹀崟鏉ユ簮涓庢枃浠?/p>
+      <p class="text-sm text-gray-400 mb-2">鏀寔 .csv / .xlsx / .xls 鏍煎紡</p>
+      <!-- 骞冲彴閫夋嫨 -->
+      <div class="flex justify-center gap-3 mb-4">
+        <button onclick="selectPlatform('wechat')" class="platform-btn px-5 py-2.5 rounded-full text-sm font-medium transition-all" data-platform="wechat" style="background:#F3F4F6;color:#666;">寰俊</button>
+        <button onclick="selectPlatform('alipay')" class="platform-btn px-5 py-2.5 rounded-full text-sm font-medium transition-all" data-platform="alipay" style="background:#F3F4F6;color:#666;">鏀粯瀹?/button>
+      </div>
+      <p class="text-xs text-gray-400 mb-4" id="platform-hint">璇峰厛閫夋嫨璐﹀崟鏉ユ簮</p>
+      <p class="text-xs text-gray-400 mb-4">寰俊锛氭垜 鈫?鏈嶅姟 鈫?閽卞寘 鈫?璐﹀崟 鈫?鍙充笂瑙捖仿仿?鈫?瀵煎嚭<br>鏀粯瀹濓細鎴戠殑 鈫?璐﹀崟 鈫?鍙充笂瑙捖仿仿?鈫?瀵煎嚭</p>
+      <label class="inline-block bg-gray-300 text-white px-8 py-3 rounded-full text-sm font-medium cursor-pointer transition-colors" id="file-label" style="pointer-events:none;">
+        璇峰厛閫夋嫨鏉ユ簮
+        <input type="file" accept=".csv,.xlsx,.xls" class="hidden" id="file-input" onchange="handleFile(event)" disabled>
+      </label>
+    </div>
+    <div class="bg-white rounded-2xl p-8 shadow-sm text-center hidden mb-4" id="import-loading">
+      <div class="text-5xl mb-3 animate-bounce">鈴?/div>
+      <p class="text-gray-500">姝ｅ湪瑙ｆ瀽璐﹀崟骞惰嚜鍔ㄥ垎绫?..</p>
+    </div>
+    <div id="import-preview" class="hidden">
+      <div class="bg-white rounded-2xl p-5 shadow-sm mb-4">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-sm font-semibold text-gray-700">璇嗗埆鍒?<span id="import-count">0</span> 绗斾氦鏄?/h3>
+          <span class="text-xs text-primary font-medium" id="import-auto-rate"></span>
+        </div>
+        <div class="max-h-80 overflow-y-auto space-y-2" id="import-items"></div>
+      </div>
+      <div class="flex gap-3">
+        <button onclick="cancelImport()" class="flex-1 py-3.5 bg-gray-100 rounded-2xl font-semibold text-sm text-gray-600">鍙栨秷</button>
+        <button onclick="confirmImport()" class="flex-1 py-3.5 bg-primary text-white rounded-2xl font-semibold text-sm hover:bg-primary-dark">纭瀵煎叆</button>
+      </div>
+    </div>
+    <div class="bg-white rounded-2xl p-8 shadow-sm text-center hidden" id="import-success">
+      <div class="text-6xl mb-3">馃帀</div>
+      <p class="text-lg font-semibold text-gray-800 mb-1">瀵煎叆鎴愬姛</p>
+      <p class="text-sm text-gray-400 mb-4" id="import-success-msg"></p>
+      <div class="flex gap-3 justify-center">
+        <button onclick="resetImport()" class="px-6 py-2.5 bg-gray-100 rounded-full text-sm font-medium text-gray-600">缁х画瀵煎叆</button>
+        <button onclick="switchTab('home');resetImport()" class="px-6 py-2.5 bg-primary text-white rounded-full text-sm font-medium">鍥為椤?/button>
+      </div>
+    </div>
+    <div class="bg-white rounded-2xl p-8 shadow-sm text-center hidden" id="import-error">
+      <div class="text-6xl mb-3">馃槥</div>
+      <p class="text-gray-700 font-medium mb-1">鏃犳硶璇嗗埆鏂囦欢鏍煎紡</p>
+      <p class="text-sm text-gray-400 mb-4">璇蜂笂浼犲井淇?鏀粯瀹濈殑鏍囧噯璐﹀崟 CSV 鎴?Excel 鏂囦欢</p>
+      <button onclick="resetImport()" class="px-6 py-2.5 bg-primary text-white rounded-full text-sm font-medium">閲嶆柊閫夋嫨</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== PAGE: 鍘嗗彶鏄庣粏 ==================== -->
+<div class="page" id="page-history" style="max-width:480px;margin:0 auto;min-height:100vh;">
+  <div class="px-5 pt-12 content-area">
+    <h1 class="text-xl font-bold text-gray-800 mb-4">娑堣垂鏄庣粏</h1>
+
+    <!-- 鏈堝害瓒嬪娍鍥?-->
+    <div class="bg-white rounded-2xl p-5 mb-4 shadow-sm">
+      <h3 class="text-sm font-semibold text-gray-700 mb-3">鏈堝害瓒嬪娍</h3>
+      <div style="height:180px;" class="flex items-end gap-2 px-1" id="trend-bars"></div>
+      <div class="flex justify-between text-xs text-gray-400 mt-2 px-1" id="trend-labels"></div>
+    </div>
+
+    <!-- 鏃ュ巻鐑姏鍥撅細褰撴湀姣忔棩鏀嚭 -->
+    <div class="bg-white rounded-2xl p-5 mb-4 shadow-sm">
+      <h3 class="text-sm font-semibold text-gray-700 mb-3">姣忔棩鏀嚭 路 <span id="cal-month-label"></span></h3>
+      <div class="grid grid-cols-7 gap-1 text-center text-xs text-gray-400 mb-2">
+        <span>鏃?/span><span>涓€</span><span>浜?/span><span>涓?/span><span>鍥?/span><span>浜?/span><span>鍏?/span>
+      </div>
+      <div class="grid grid-cols-7 gap-1" id="calendar-grid"></div>
+      <div class="flex items-center gap-4 mt-3 text-xs text-gray-400 justify-center">
+        <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-sm bg-gray-100 inline-block"></span> 鏃?/span>
+        <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-sm bg-green-200 inline-block"></span> 浣?/span>
+        <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-sm bg-green-400 inline-block"></span> 涓?/span>
+        <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-sm bg-green-600 inline-block"></span> 楂?/span>
+      </div>
+    </div>
+
+    <!-- 绛涢€夊尯锛氭湀浠藉鑸?+ 鏃ユ湡鍖洪棿 + 鎼滅储 -->
+    <div class="bg-white rounded-2xl p-4 shadow-sm">
+      <div class="flex items-center gap-2 mb-3">
+        <button onclick="historyMonthNav(-1)" class="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200 text-sm">&lt;</button>
+        <span class="flex-1 text-center text-sm font-semibold text-gray-700" id="history-month-label">2026骞?鏈?/span>
+        <button onclick="historyMonthNav(1)" class="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200 text-sm">&gt;</button>
+      </div>
+      <!-- 鏃ユ湡鍖洪棿 -->
+      <div class="flex items-center gap-2 mb-3">
+        <input type="date" id="history-date-from" class="flex-1 bg-gray-50 rounded-xl px-3 py-2 text-xs border-none" onchange="onDateRangeChange()" title="寮€濮嬫棩鏈?>
+        <span class="text-gray-300 text-xs">鑷?/span>
+        <input type="date" id="history-date-to" class="flex-1 bg-gray-50 rounded-xl px-3 py-2 text-xs border-none" onchange="onDateRangeChange()" title="缁撴潫鏃ユ湡">
+        <button onclick="clearDateRange()" class="text-xs text-gray-400 hover:text-primary flex-shrink-0" id="clear-date-range-btn" style="display:none;">娓呴櫎</button>
+      </div>
+      <div class="flex gap-3 mb-3">
+        <input type="text" id="history-search" placeholder="鎼滅储澶囨敞鎴栧垎绫?.." class="flex-1 bg-gray-50 rounded-xl px-4 py-2.5 text-sm border-none" oninput="renderHistory()">
+        <select id="history-filter-cat" class="bg-gray-50 rounded-xl px-3 py-2.5 text-sm border-none" onchange="renderHistory()">
+          <option value="">鍏ㄩ儴鍒嗙被</option>
+        </select>
+      </div>
+      <div class="mb-2 flex justify-between text-xs text-gray-400">
+        <span>鍏?<span id="history-count">0</span> 绗?路 鍚堣 楼<span id="history-sum">0</span></span>
+        <span id="history-page-info"></span>
+      </div>
+      <div class="space-y-1" id="history-list"></div>
+      <div class="text-center py-8 text-gray-400 text-sm hidden" id="history-empty">娌℃湁鍖归厤鐨勮褰?/div>
+      <button onclick="loadMoreHistory()" class="w-full mt-3 py-2.5 bg-gray-50 rounded-xl text-sm text-gray-500 font-medium hover:bg-gray-100 transition-colors hidden" id="history-load-more">鍔犺浇鏇村</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== PAGE: 璁剧疆 ==================== -->
+<div class="page" id="page-settings" style="max-width:480px;margin:0 auto;min-height:100vh;">
+  <div class="px-5 pt-12 content-area">
+    <h1 class="text-xl font-bold text-gray-800 mb-5">璁剧疆</h1>
+
+    <!-- 鏈堝害棰勭畻绠＄悊 -->
+    <div class="bg-white rounded-2xl p-5 mb-4 shadow-sm">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-sm font-semibold text-gray-700">鏈堝害棰勭畻绠＄悊</h3>
+        <button onclick="showBatchBudgetModal()" class="text-xs text-primary font-medium hover:text-primary-dark bg-primary-bg px-3 py-1.5 rounded-full">鎵归噺璁剧疆</button>
+      </div>
+      <!-- 褰撳墠鏈堥绠?-->
+      <div class="flex items-center gap-3 py-2" id="current-month-budget-row">
+        <span class="text-sm font-medium text-gray-700 w-20" id="settings-cur-month-label">2026骞?鏈?/span>
+        <div class="flex-1 flex items-center gap-2">
+          <span class="text-gray-300 text-sm">楼</span>
+          <input type="number" id="settings-cur-budget" placeholder="鏈缃? class="flex-1 bg-gray-50 rounded-lg px-3 py-2 text-sm border-none text-right font-medium" step="0.01" min="0" />
+        </div>
+        <span class="text-xs text-gray-400 w-16 text-right" id="settings-cur-spent">宸茶姳 楼0</span>
+      </div>
+      <button onclick="showModal('all-months-budget-modal')" class="w-full mt-3 py-2.5 text-xs text-gray-400 hover:text-primary transition-colors">鏌ョ湅涓庣鐞嗗叏閮ㄦ湀浠介绠?鈫?/button>
+    </div>
+
+    <!-- 棰勮闃堝€硷紙鐙珛銆佸叏灞€锛?-->
+    <div class="bg-white rounded-2xl p-5 mb-4 shadow-sm">
+      <h3 class="text-sm font-semibold text-gray-700 mb-1">瓒呮敮棰勮闃堝€?/h3>
+      <p class="text-xs text-gray-400 mb-3">鎵€鏈夋湀浠介€氱敤锛屽綋鏈堟秷璐瑰崰姣旇揪鍒伴槇鍊兼椂瑙﹀彂鎻愰啋</p>
+      <div class="flex items-center gap-4">
+        <input type="range" id="global-threshold" min="50" max="100" value="80" class="flex-1 accent-primary" oninput="document.getElementById('global-threshold-val').textContent=this.value+'%'">
+        <span class="text-sm font-semibold text-primary min-w-[3rem] text-right" id="global-threshold-val">80%</span>
+      </div>
+    </div>
+
+    <!-- 鍒嗙被绠＄悊 -->
+    <div class="bg-white rounded-2xl p-5 mb-4 shadow-sm">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-sm font-semibold text-gray-700">鍒嗙被涓庡叧閿瘝</h3>
+        <button onclick="showModal('category-manage-modal')" class="text-xs text-primary font-medium hover:text-primary-dark">绠＄悊</button>
+      </div>
+      <p class="text-xs text-gray-400">绠＄悊娑堣垂鍒嗙被鍙?CSV/Excel 瀵煎叆鏃剁殑鑷姩鍖归厤鍏抽敭璇?/p>
+    </div>
+
+    <!-- 鏁版嵁绠＄悊 -->
+    <div class="bg-white rounded-2xl p-5 mb-4 shadow-sm">
+      <h3 class="text-sm font-semibold text-gray-700 mb-4">鏁版嵁绠＄悊</h3>
+      <div class="space-y-3">
+        <button onclick="exportData()" class="w-full py-3 bg-gray-50 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors">馃摛 瀵煎嚭鏁版嵁锛圝SON锛?/button>
+        <label class="block w-full py-3 bg-gray-50 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors text-center cursor-pointer">
+          馃摜 瀵煎叆鏁版嵁锛圝SON锛?          <input type="file" accept=".json" class="hidden" onchange="importData(event)">
+        </label>
+        <button onclick="showModal('clear-confirm-modal')" class="w-full py-3 bg-red-50 rounded-xl text-sm font-medium text-red-500 hover:bg-red-100 transition-colors">馃棏 娓呯┖鍏ㄩ儴鏁版嵁</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== 搴曢儴瀵艰埅 ==================== -->
+<div class="tab-bar flex items-center justify-around py-2">
+  <button onclick="switchTab('home')" class="tab-btn flex flex-col items-center gap-0.5 px-4 py-1 text-primary" data-tab="home">
+    <span class="text-xl">馃彔</span><span class="text-xs font-medium">棣栭〉</span>
+  </button>
+  <button onclick="switchTab('predict')" class="tab-btn flex flex-col items-center gap-0.5 px-4 py-1 text-gray-400" data-tab="predict">
+    <span class="text-xl">馃敭</span><span class="text-xs font-medium">棰勬祴</span>
+  </button>
+  <button onclick="switchTab('import')" class="tab-btn flex flex-col items-center gap-0.5 px-4 py-1 text-gray-400" data-tab="import">
+    <span class="text-xl">馃摜</span><span class="text-xs font-medium">瀵煎叆</span>
+  </button>
+  <button onclick="switchTab('history')" class="tab-btn flex flex-col items-center gap-0.5 px-4 py-1 text-gray-400" data-tab="history">
+    <span class="text-xl">馃搵</span><span class="text-xs font-medium">鏄庣粏</span>
+  </button>
+  <button onclick="switchTab('settings')" class="tab-btn flex flex-col items-center gap-0.5 px-4 py-1 text-gray-400" data-tab="settings">
+    <span class="text-xl">鈿欙笍</span><span class="text-xs font-medium">璁剧疆</span>
+  </button>
+</div>
+
+<!-- ==================== MODALS ==================== -->
+
+<!-- 鍗曟湀棰勭畻寮圭獥 -->
+<div class="modal-overlay" id="budget-modal">
+  <div class="modal-sheet">
+    <div class="flex items-center justify-between mb-5">
+      <h3 class="text-lg font-bold">璁惧畾棰勭畻 路 <span id="budget-modal-month"></span></h3>
+      <button onclick="hideModal('budget-modal')" class="text-gray-400 text-xl">&times;</button>
+    </div>
+    <div class="mb-5">
+      <label class="text-xs text-gray-400 mb-1 block">棰勭畻鎬婚</label>
+      <div class="flex items-center border-b-2 border-gray-100 focus-within:border-primary transition-colors pb-2">
+        <span class="text-xl font-bold text-gray-800 mr-1">楼</span>
+        <input type="number" id="modal-budget-amount" class="flex-1 text-xl font-bold text-gray-800 bg-transparent" placeholder="0.00" step="0.01" min="0">
+      </div>
+    </div>
+    <p class="text-xs text-gray-400 mb-4">杩?鏈堟湀鍧囪姳璐癸細<span class="font-semibold text-gray-700" id="avg-spending-hint">楼8,200</span></p>
+    <button onclick="saveBudgetFromModal()" class="w-full bg-primary text-white py-3.5 rounded-2xl font-semibold text-sm hover:bg-primary-dark">纭</button>
+  </div>
+</div>
+
+<!-- 鎵归噺棰勭畻寮圭獥 -->
+<div class="modal-overlay" id="batch-budget-modal">
+  <div class="modal-sheet">
+    <div class="flex items-center justify-between mb-5">
+      <h3 class="text-lg font-bold">鎵归噺璁剧疆棰勭畻</h3>
+      <button onclick="hideModal('batch-budget-modal')" class="text-gray-400 text-xl">&times;</button>
+    </div>
+    <div class="mb-4">
+      <label class="text-xs text-gray-400 mb-2 block">閫夋嫨鏃堕棿鑼冨洿</label>
+      <div class="flex flex-wrap gap-2 mb-3" id="batch-range-options">
+        <button onclick="selectBatchRange('3m')" class="batch-range-btn px-4 py-2 rounded-full text-sm font-medium bg-gray-100 text-gray-600 hover:bg-primary-bg hover:text-primary transition-colors" data-range="3m">3涓湀</button>
+        <button onclick="selectBatchRange('6m')" class="batch-range-btn px-4 py-2 rounded-full text-sm font-medium bg-gray-100 text-gray-600 hover:bg-primary-bg hover:text-primary transition-colors" data-range="6m">6涓湀</button>
+        <button onclick="selectBatchRange('1y')" class="batch-range-btn px-4 py-2 rounded-full text-sm font-medium bg-gray-100 text-gray-600 hover:bg-primary-bg hover:text-primary transition-colors" data-range="1y">12涓湀</button>
+        <button onclick="selectBatchRange('custom')" class="batch-range-btn px-4 py-2 rounded-full text-sm font-medium bg-gray-100 text-gray-600 hover:bg-primary-bg hover:text-primary transition-colors" data-range="custom">鑷畾涔?/button>
+      </div>
+      <!-- 鏂瑰悜閫夋嫨 -->
+      <div class="flex items-center gap-2 mb-3" id="batch-direction-row">
+        <span class="text-xs text-gray-400">浠庡綋鍓嶆湀璧凤細</span>
+        <button onclick="selectBatchDir('forward')" class="batch-dir-btn px-3 py-1.5 rounded-full text-xs font-medium transition-colors" data-dir="forward" style="background:#ECFDF5;color:#10B981;">鍚戝悗锛堟湭鏉ワ級</button>
+        <button onclick="selectBatchDir('backward')" class="batch-dir-btn px-3 py-1.5 rounded-full text-xs font-medium transition-colors" data-dir="backward" style="background:#F3F4F6;color:#666;">鍚戝墠锛堣繃鍘伙級</button>
+      </div>
+      <div class="hidden mt-3" id="batch-custom-months">
+        <div class="flex flex-wrap gap-2" id="batch-month-checkboxes"></div>
+      </div>
+      <p class="text-xs text-gray-400 mt-2" id="batch-range-desc">灏嗛绠楀簲鐢ㄥ埌褰撳墠鏈堝強鏈潵2涓湀</p>
+    </div>
+    <div class="mb-5">
+      <label class="text-xs text-gray-400 mb-1 block">缁熶竴棰勭畻閲戦</label>
+      <div class="flex items-center border-b-2 border-gray-100 focus-within:border-primary transition-colors pb-2">
+        <span class="text-xl font-bold text-gray-800 mr-1">楼</span>
+        <input type="number" id="batch-budget-amount" class="flex-1 text-xl font-bold text-gray-800 bg-transparent" placeholder="0.00" step="0.01" min="0">
+      </div>
+    </div>
+    <button onclick="saveBatchBudgets()" class="w-full bg-primary text-white py-3.5 rounded-2xl font-semibold text-sm hover:bg-primary-dark">纭鎵归噺璁剧疆</button>
+  </div>
+</div>
+
+<!-- 鍏ㄩ儴鏈堜唤棰勭畻绠＄悊寮圭獥 -->
+<div class="modal-overlay" id="all-months-budget-modal">
+  <div class="modal-sheet">
+    <div class="flex items-center justify-between mb-5">
+      <h3 class="text-lg font-bold">鍏ㄩ儴鏈堜唤棰勭畻</h3>
+      <button onclick="hideModal('all-months-budget-modal')" class="text-gray-400 text-xl">&times;</button>
+    </div>
+    <div class="space-y-3 max-h-96 overflow-y-auto" id="all-months-budget-list"></div>
+    <button onclick="showBatchBudgetModal();hideModal('all-months-budget-modal')" class="w-full mt-4 py-3 border-2 border-dashed border-gray-200 rounded-xl text-gray-400 text-sm font-medium hover:border-primary hover:text-primary transition-colors">+ 鎵归噺璁剧疆棰勭畻</button>
+    <button onclick="saveAllMonthsFromModal()" class="w-full mt-3 bg-primary text-white py-3.5 rounded-2xl font-semibold text-sm hover:bg-primary-dark">淇濆瓨</button>
+  </div>
+</div>
+
+<!-- 鍒嗙被绠＄悊寮圭獥 -->
+<div class="modal-overlay" id="category-manage-modal">
+  <div class="modal-sheet">
+    <div class="flex items-center justify-between mb-5">
+      <h3 class="text-lg font-bold">鍒嗙被涓庡叧閿瘝绠＄悊</h3>
+      <button onclick="hideModal('category-manage-modal')" class="text-gray-400 text-xl">&times;</button>
+    </div>
+    <div class="space-y-4 max-h-80 overflow-y-auto" id="category-manage-list"></div>
+    <button onclick="addCategory()" class="w-full mt-4 py-3 border-2 border-dashed border-gray-200 rounded-xl text-gray-400 text-sm font-medium hover:border-primary hover:text-primary transition-colors">+ 娣诲姞鍒嗙被</button>
+    <button onclick="saveCategories()" class="w-full mt-3 bg-primary text-white py-3.5 rounded-2xl font-semibold text-sm hover:bg-primary-dark">淇濆瓨</button>
+  </div>
+</div>
+
+<!-- 鍒嗙被鍒犻櫎纭寮圭獥 -->
+<div class="modal-overlay" id="delete-cat-confirm-modal">
+  <div class="modal-sheet text-center">
+    <div class="text-5xl mb-4">鈿狅笍</div>
+    <h3 class="text-lg font-bold mb-2">纭鍒犻櫎璇ュ垎绫伙紵</h3>
+    <p class="text-sm text-gray-400 mb-1">鍒嗙被鍒犻櫎鍚庯紝宸叉湁璁板綍涓殑璇ュ垎绫讳笉浼氳娓呴櫎</p>
+    <p class="text-sm text-gray-400 mb-5">寤鸿鍏堢‘璁ゆ病鏈夊湪鐢ㄦ鍒嗙被</p>
+    <div class="flex gap-3">
+      <button onclick="hideModal('delete-cat-confirm-modal')" class="flex-1 py-3 bg-gray-100 rounded-2xl font-semibold text-sm text-gray-600">鍙栨秷</button>
+      <button onclick="confirmDeleteCategory()" class="flex-1 py-3 bg-red-500 text-white rounded-2xl font-semibold text-sm">纭鍒犻櫎</button>
+    </div>
+  </div>
+</div>
+
+<!-- 娓呯┖纭寮圭獥 -->
+<div class="modal-overlay" id="clear-confirm-modal">
+  <div class="modal-sheet text-center">
+    <div class="text-5xl mb-4">鈿狅笍</div>
+    <h3 class="text-lg font-bold mb-2">纭娓呯┖鍏ㄩ儴鏁版嵁锛?/h3>
+    <p class="text-sm text-gray-400 mb-5">姝ゆ搷浣滀笉鍙仮澶嶏紝寤鸿鍏堝鍑哄浠?/p>
+    <div class="flex gap-3">
+      <button onclick="hideModal('clear-confirm-modal')" class="flex-1 py-3 bg-gray-100 rounded-2xl font-semibold text-sm text-gray-600">鍙栨秷</button>
+      <button onclick="clearAllData()" class="flex-1 py-3 bg-red-500 text-white rounded-2xl font-semibold text-sm">纭娓呯┖</button>
+    </div>
+  </div>
+</div>
+
+<!-- 鍒犻櫎璁板綍纭寮圭獥 -->
+<div class="modal-overlay" id="delete-confirm-modal">
+  <div class="modal-sheet text-center">
+    <h3 class="text-lg font-bold mb-2">鍒犻櫎杩欐潯璁板綍锛?/h3>
+    <p class="text-sm text-gray-400 mb-5">鍒犻櫎鍚庝笉鍙仮澶?/p>
+    <div class="flex gap-3">
+      <button onclick="hideModal('delete-confirm-modal')" class="flex-1 py-3 bg-gray-100 rounded-2xl font-semibold text-sm text-gray-600">鍙栨秷</button>
+      <button onclick="confirmDelete()" class="flex-1 py-3 bg-red-500 text-white rounded-2xl font-semibold text-sm">鍒犻櫎</button>
+    </div>
+  </div>
+</div>
+
+<!-- 缂栬緫璁板綍寮圭獥 -->
+<div class="modal-overlay" id="edit-record-modal">
+  <div class="modal-sheet">
+    <div class="flex items-center justify-between mb-5">
+      <h3 class="text-lg font-bold">缂栬緫璁板綍</h3>
+      <button onclick="hideModal('edit-record-modal')" class="text-gray-400 text-xl">&times;</button>
+    </div>
+    <div class="mb-4">
+      <label class="text-xs text-gray-400 mb-1 block">鍒嗙被</label>
+      <select id="edit-category" class="w-full bg-gray-50 rounded-xl px-4 py-3 text-sm border-none"></select>
+    </div>
+    <div class="mb-4">
+      <label class="text-xs text-gray-400 mb-1 block">閲戦</label>
+      <div class="flex items-center border-b-2 border-gray-100 focus-within:border-primary transition-colors pb-2">
+        <span class="text-lg font-bold text-gray-800 mr-1">楼</span>
+        <input type="number" id="edit-amount" class="flex-1 text-lg font-bold text-gray-800 bg-transparent" placeholder="0.00" step="0.01" min="0">
+      </div>
+    </div>
+    <div class="mb-4">
+      <label class="text-xs text-gray-400 mb-1 block">鏃ユ湡</label>
+      <input type="date" id="edit-date" class="w-full bg-gray-50 rounded-xl px-4 py-3 text-sm border-none">
+    </div>
+    <div class="mb-5">
+      <label class="text-xs text-gray-400 mb-1 block">澶囨敞</label>
+      <input type="text" id="edit-note" class="w-full bg-gray-50 rounded-xl px-4 py-3 text-sm border-none" placeholder="澶囨敞淇℃伅">
+    </div>
+    <div class="flex gap-3">
+      <button onclick="hideModal('edit-record-modal')" class="flex-1 py-3 bg-gray-100 rounded-2xl font-semibold text-sm text-gray-600">鍙栨秷</button>
+      <button onclick="confirmEdit()" class="flex-1 py-3 bg-primary text-white rounded-2xl font-semibold text-sm">淇濆瓨</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ==================== DATA STORE ====================
+const CAT_COLORS = ['#10B981','#34D399','#059669','#06B6D4','#22D3EE','#6366F1','#8B5CF6','#F59E0B','#F97316','#EF4444','#EC4899','#84CC16','#14B8A6','#78716C'];
+
+const DEFAULT_CATEGORIES = [
+  { name:'椁愰ギ', keywords:['澶栧崠','缇庡洟','楗夸簡涔?,'椁愬巺','楗簵','灏忓悆','鐑х儰','鐏攨','濂惰尪','鍜栧暋','鏄熷反鍏?,'鐟炲垢','鑲痉鍩?,'楹﹀綋鍔?,'蹇呰儨瀹?,'娴峰簳鎹?,'鐩掗┈','鍙挌','涔拌彍','瓒呭競','渚垮埄搴?,'闆堕','姘存灉','闈㈠寘','铔嬬硶','椋熷爞','渚垮綋','鎷夐潰','楹昏荆鐑?,'鐐搁浮','鎶惃','鏂欑悊','鏃ユ枡','鏃╄尪','鍗堟櫄椁?] },
+  { name:'浜ら€?, keywords:['婊存淮','鎵撹溅','鍑虹杞?,'鍦伴搧','鍏氦','楂橀搧','鐏溅','鏈虹エ','鑸彮','鍔犳补','鍏呯數','鍋滆溅','ETC','鍝堝暟','闈掓','缇庡洟鍗曡溅','鏇规搷鍑鸿','T3鍑鸿','鑺卞皬鐚?,'椤洪杞?] },
+  { name:'鏈嶉グ', keywords:['浼樿。搴?,'ZARA','H&M','UR','鑰愬厠','闃胯开','鏉庡畞','瀹夎笍','琛ｆ湇','瑁ゅ瓙','闉嬪瓙','鍖呭寘','甯藉瓙','鍥村肪','棣栭グ','鍐呰。','琚滃瓙','娣樺疂','鎷煎澶?,'浜笢'] },
+  { name:'缇庡', keywords:['鍖栧鍝?,'鎶よ偆鍝?,'闈㈣啘','鍙ｇ孩','绮夊簳','鐪煎奖','鑵孩','棣欐按','闃叉檼','鍗稿','娲楅潰濂?,'缇庡','缇庣敳','缇庡彂','鐞嗗彂','Sephora','涓濊姍鍏?,'灞堣嚕姘?,'绮惧崕','涔虫恫','闈㈤湝'] },
+  { name:'瀹犵墿', keywords:['瀹犵墿','鐚伯','鐙楃伯','鐚爞','椹辫櫕','鐤嫍','娲楁尽','瀹犵墿鍖婚櫌','鐚挭','鐙楃嫍','缃愬ご','鍐诲共'] },
+  { name:'鎴跨', keywords:['鎴跨','绉熼噾','鎴胯垂','鐗╀笟','鍏瘬'] },
+  { name:'姘寸數璐?, keywords:['姘磋垂','鐢佃垂','鐕冩皵','鐓ゆ皵','鏆栨皵','鑷潵姘?,'鍥藉鐢电綉','鍗楁柟鐢电綉','缂磋垂'] },
+  { name:'閫氳', keywords:['璇濊垂','娴侀噺','瀹藉甫','涓浗绉诲姩','涓浗鑱旈€?,'涓浗鐢典俊','鑵捐瑙嗛','鐖卞鑹?,'浼橀叿','B绔?,'浼氬憳','璁㈤槄','QQ闊充箰','缃戞槗浜?,'鐧惧害缃戠洏','iCloud'] },
+  { name:'鏃ョ敤鍝?, keywords:['娲楄。','绾稿肪','鍨冨溇琚?,'娓呮磥','鎷栨妸','姣涘肪','鐗欏埛','鐗欒啅','娲楀彂姘?,'娌愭荡闇?,'娲楁墜娑?] },
+  { name:'濞变箰', keywords:['鐢靛奖','KTV','鍓ф湰鏉€','瀵嗗','娓告垙','steam','鍏呭€?,'鏅尯','闂ㄧエ','鏃呰','閰掑簵','姘戝','娓告吵','鍋ヨ韩','Keep','楹诲皢','妗屾父'] },
+  { name:'鍖荤枟', keywords:['鍖婚櫌','鑽埧','鎸傚彿','浣撴','鐗欑','鐪肩','涓嵂','瑗胯嵂','闂ㄨ瘖','鍖讳繚'] },
+  { name:'鏁欒偛', keywords:['璇剧▼','鍩硅','涔︾睄','鑰冭瘯','鎶ュ悕璐?,'寰楀埌','鐭ヤ箮','妯婄櫥','涔﹀簵','涔颁功'] },
+  { name:'浜烘儏', keywords:['绾㈠寘','浠藉瓙','閫佺ぜ','璇峰','杞处'] },
+  { name:'鍏朵粬', keywords:[] }
+];
+
+function getStore() {
+  let data = {};
+  try { const raw = localStorage.getItem('budget_app_data_v2'); if (raw) data = JSON.parse(raw); } catch(e) {}
+  if (!data.records) data.records = [];
+  if (!data.budgets) data.budgets = {}; // { '2026-05': {amount:10000}, ... }
+  if (!data.categories) data.categories = JSON.parse(JSON.stringify(DEFAULT_CATEGORIES));
+  if (!data.settings) data.settings = { threshold: 80 };
+  return data;
+}
+function saveStore(data) { localStorage.setItem('budget_app_data_v2', JSON.stringify(data)); }
+function getCurrentMonth() { const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
+
+// ==================== NAVIGATION ====================
+function switchTab(tab) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  const page = document.getElementById('page-'+tab);
+  if (page) page.classList.add('active');
+  document.querySelectorAll('.tab-btn').forEach(b => { b.classList.remove('text-primary'); b.classList.add('text-gray-400'); });
+  const btn = document.querySelector('.tab-btn[data-tab="'+tab+'"]');
+  if (btn) { btn.classList.remove('text-gray-400'); btn.classList.add('text-primary'); }
+  if (tab==='home') renderHome();
+  if (tab==='predict') renderPredict();
+  if (tab==='history') renderHistory();
+  if (tab==='record') renderRecordPage();
+  if (tab==='settings') renderSettings();
+  document.getElementById('fab-btn').style.display = (tab==='home') ? 'flex' : 'none';
+  window.location.hash = tab;
+}
+
+function showModal(id) {
+  document.getElementById(id).classList.add('show');
+  if (id==='category-manage-modal') renderCategoryManage();
+  if (id==='all-months-budget-modal') renderAllMonthsBudgetModal();
+}
+
+function hideModal(id) { document.getElementById(id).classList.remove('show'); }
+
+// ==================== HOME PAGE ====================
+let viewingMonth = getCurrentMonth();
+
+function switchMonth(dir) {
+  const d = new Date(viewingMonth+'-01');
+  d.setMonth(d.getMonth()+dir);
+  viewingMonth = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+  renderHome();
+}
+
+function getMonthRecords(month) {
+  return getStore().records.filter(r => r.date && r.date.startsWith(month));
+}
+
+function getMonthTotal(month) {
+  return getMonthRecords(month).reduce((s,r)=>s+(parseFloat(r.amount)||0),0);
+}
+
+function renderHome() {
+  const store = getStore();
+  const month = viewingMonth;
+  const budget = store.budgets[month] || {};
+  const budgetAmount = parseFloat(budget.amount) || 0;
+  const total = getMonthTotal(month);
+  const records = getMonthRecords(month);
+  const threshold = (store.settings||{}).threshold || 80;
+
+  document.getElementById('home-month-label').textContent = month.replace('-','骞?)+'鏈?;
+
+  const budgetCard = document.getElementById('budget-card');
+  const emptyBudget = document.getElementById('home-empty-budget');
+
+  if (budgetAmount > 0) {
+    budgetCard.classList.remove('hidden'); emptyBudget.classList.add('hidden');
+    const remaining = Math.max(0, budgetAmount - total);
+    const pct = Math.min(100, Math.round(total/budgetAmount*100));
+    document.getElementById('home-budget-label').textContent = '鍓╀綑 楼'+remaining.toLocaleString(undefined,{minimumFractionDigits:2});
+    document.getElementById('home-spent').textContent = '楼'+Math.round(total).toLocaleString();
+    document.getElementById('home-total-budget').textContent = '/ 楼'+budgetAmount.toLocaleString();
+    document.getElementById('home-spent-text').textContent = '楼'+total.toLocaleString(undefined,{minimumFractionDigits:2});
+    document.getElementById('home-remaining').textContent = '楼'+remaining.toLocaleString(undefined,{minimumFractionDigits:2});
+    document.getElementById('home-tx-count').textContent = '鍏?+records.length+'绗?;
+    const circ = 2*Math.PI*42;
+    document.getElementById('progress-circle').setAttribute('stroke-dashoffset', circ - (pct/100)*circ);
+
+    const warn = document.getElementById('warning-banner');
+    if (pct >= threshold && budgetAmount > 0) {
+      warn.classList.add('show');
+      document.getElementById('warning-percent').textContent = pct+'%';
+      document.getElementById('warning-text').textContent = '宸茶秴杩囧叏灞€棰勮绾?'+threshold+'%锛屾湰鏈堣繕闇€鎺у埗鏀嚭';
+    } else { warn.classList.remove('show'); }
+  } else {
+    budgetCard.classList.add('hidden'); emptyBudget.classList.remove('hidden');
+    document.getElementById('warning-banner').classList.remove('show');
+  }
+
+  // Pie chart + legend
+  const pieSection = document.getElementById('pie-section');
+  const emptyRecords = document.getElementById('home-empty-records');
+  const recentSection = document.getElementById('recent-section');
+  if (records.length === 0) {
+    pieSection.classList.add('hidden'); emptyRecords.classList.remove('hidden'); recentSection.classList.add('hidden');
+  } else {
+    pieSection.classList.remove('hidden'); emptyRecords.classList.add('hidden'); recentSection.classList.remove('hidden');
+    drawPie(records);
+    // Recent 5
+    const recent = records.slice().sort((a,b)=>b.date.localeCompare(a.date)).slice(0,5);
+    document.getElementById('recent-list').innerHTML = recent.map(r => {
+      const cat = store.categories.find(c=>c.name===r.category)||{};
+      return `<div class="flex items-center justify-between py-2 border-b border-gray-50 last:border-0 cursor-pointer hover:bg-gray-50 rounded-lg px-1 transition-colors" onclick="openEditRecord(${r.id})">
+        <div class="flex items-center gap-3">
+          <div class="w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold" style="background:${cat.color||'#78716C'}">${(r.category||'鍏朵粬')[0]}</div>
+          <div><p class="text-sm font-medium text-gray-700">${r.category||'鍏朵粬'}</p><p class="text-xs text-gray-400">${(r.date||'').slice(5)} ${r.note||''}</p></div>
+        </div>
+        <span class="text-sm font-semibold text-gray-800">-楼${parseFloat(r.amount).toFixed(2)}</span>
+      </div>`;
+    }).join('');
+  }
+}
+
+function drawPie(records) {
+  const store = getStore();
+  const byCat = {};
+  let grand = 0;
+  records.forEach(r => {
+    const cat = r.category||'鍏朵粬';
+    if (!byCat[cat]) byCat[cat]=0;
+    byCat[cat] += parseFloat(r.amount)||0;
+    grand += parseFloat(r.amount)||0;
+  });
+  const entries = Object.entries(byCat).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  const canvas = document.getElementById('pie-canvas');
+  const ctx = canvas.getContext('2d');
+  const cx=70, cy=70, r=55;
+  ctx.clearRect(0,0,140,140);
+  let angle = -Math.PI/2;
+  entries.forEach(([name,val]) => {
+    const slice = (val/grand)*2*Math.PI;
+    const cat = store.categories.find(c=>c.name===name)||{};
+    ctx.beginPath();
+    ctx.moveTo(cx,cy);
+    ctx.arc(cx,cy,r,angle,angle+slice);
+    ctx.closePath();
+    ctx.fillStyle = cat.color||'#78716C';
+    ctx.fill();
+    angle += slice;
+  });
+  // Inner circle for donut
+  ctx.beginPath(); ctx.arc(cx,cy,30,0,2*Math.PI); ctx.fillStyle='#fff'; ctx.fill();
+
+  // Legend
+  document.getElementById('pie-legend').innerHTML = entries.map(([name,val]) => {
+    const cat = store.categories.find(c=>c.name===name)||{};
+    const pct = Math.round(val/grand*100);
+    return `<div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full flex-shrink-0" style="background:${cat.color||'#78716C'}"></span><span class="text-gray-600">${name}</span><span class="text-gray-400 ml-auto">${pct}%</span></div>`;
+  }).join('');
+}
+
+// ==================== RECORD PAGE ====================
+let recordMode = 'single';
+let selectedCategory = '椁愰ギ';
+
+function renderRecordPage() {
+  setRecordMode(recordMode);
+  document.getElementById('single-date').value = new Date().toISOString().slice(0,10);
+}
+
+function setRecordMode(mode) {
+  recordMode = mode;
+  document.getElementById('single-mode').classList.toggle('hidden', mode!=='single');
+  document.getElementById('batch-mode').classList.toggle('hidden', mode!=='batch');
+  document.getElementById('mode-single-btn').style.cssText = mode==='single'?'background:#fff;color:#10B981;':'background:transparent;color:#888;';
+  document.getElementById('mode-batch-btn').style.cssText = mode==='batch'?'background:#fff;color:#10B981;':'background:transparent;color:#888;';
+  if (mode==='single') {
+    const store = getStore();
+    selectedCategory = store.categories[0]?.name||'鍏朵粬';
+    document.getElementById('single-category-chips').innerHTML = store.categories.map(c =>
+      `<button onclick="selectCategory('${c.name}')" class="cat-chip px-3 py-1.5 rounded-full text-xs font-medium transition-all" data-cat="${c.name}" style="background:${c.name===selectedCategory?c.color:'#F3F4F6'};color:${c.name===selectedCategory?'#fff':'#666'}">${c.name}</button>`
+    ).join('');
+  }
+  if (mode==='batch') renderBatchMode();
+}
+
+function selectCategory(name) {
+  selectedCategory=name;
+  const store=getStore();
+  document.querySelectorAll('.cat-chip').forEach(el=>{
+    const cat=store.categories.find(c=>c.name===el.dataset.cat);
+    el.style.background=el.dataset.cat===name?(cat?.color||'#78716C'):'#F3F4F6';
+    el.style.color=el.dataset.cat===name?'#fff':'#666';
+  });
+}
+
+function saveSingleRecord() {
+  const amount = parseFloat(document.getElementById('single-amount').value);
+  if (!amount||amount<=0) { showToast('璇疯緭鍏ラ噾棰?); return; }
+  const date = document.getElementById('single-date').value;
+  if (!date) { showToast('璇烽€夋嫨鏃ユ湡'); return; }
+  const note = document.getElementById('single-note').value.trim();
+  const store = getStore();
+  store.records.push({id:Date.now(),amount,category:selectedCategory,date,note,source:'manual'});
+  saveStore(store);
+  document.getElementById('single-amount').value='';
+  document.getElementById('single-note').value='';
+  document.getElementById('record-success-msg').textContent='宸茶褰?楼'+amount.toFixed(2)+' 路 '+selectedCategory;
+  document.getElementById('record-success').classList.remove('hidden');
+}
+
+function hideSuccess() { document.getElementById('record-success').classList.add('hidden'); }
+
+function renderBatchMode() {
+  document.getElementById('batch-rows').innerHTML = [0,1].map(()=>batchRowHTML()).join('');
+}
+
+function batchRowHTML() {
+  const store=getStore();
+  return `<div class="flex items-center gap-2 batch-row">
+    <input type="number" placeholder="閲戦" step="0.01" class="batch-amount w-24 bg-gray-50 rounded-lg px-3 py-2.5 text-sm border-none" />
+    <select class="batch-cat bg-gray-50 rounded-lg px-2 py-2.5 text-sm border-none flex-1">${store.categories.map(c=>`<option value="${c.name}">${c.name}</option>`).join('')}</select>
+    <input type="text" placeholder="澶囨敞" class="batch-note flex-1 bg-gray-50 rounded-lg px-3 py-2.5 text-sm border-none" />
+    <button onclick="this.closest('.batch-row').remove()" class="text-gray-400 hover:text-red-400 text-lg">&times;</button>
+  </div>`;
+}
+
+function addBatchRow() {
+  const div=document.createElement('div');
+  div.innerHTML=batchRowHTML();
+  document.getElementById('batch-rows').appendChild(div.firstElementChild);
+}
+
+function saveBatchRecords() {
+  const rows=document.querySelectorAll('.batch-row');
+  const store=getStore();
+  let count=0;
+  const today=new Date().toISOString().slice(0,10);
+  rows.forEach(row=>{
+    const amount=parseFloat(row.querySelector('.batch-amount').value);
+    if(!amount||amount<=0) return;
+    store.records.push({id:Date.now()+count,amount,category:row.querySelector('.batch-cat').value,date:today,note:row.querySelector('.batch-note').value.trim(),source:'manual'});
+    count++;
+  });
+  if(count===0){showToast('璇疯嚦灏戝～鍐欎竴绗旈噾棰?);return;}
+  saveStore(store);
+  document.getElementById('record-success-msg').textContent='宸叉壒閲忚褰?'+count+' 绗旀秷璐?;
+  document.getElementById('record-success').classList.remove('hidden');
+  document.getElementById('batch-rows').innerHTML=[0,1].map(()=>batchRowHTML()).join('');
+}
+
+// ==================== PREDICT PAGE ====================
+function getRecentMonths(n) {
+  const months=[];
+  const d=new Date();
+  for(let i=0;i<n;i++){const m=new Date(d.getFullYear(),d.getMonth()-i,1);months.push(m.getFullYear()+'-'+String(m.getMonth()+1).padStart(2,'0'));}
+  return months;
+}
+
+function renderPredict() {
+  const store=getStore();
+  const thisMonth=getCurrentMonth();
+  const pastMonths=getRecentMonths(7).filter(m=>m<thisMonth);
+  const nextMonth = (()=>{const d=new Date(thisMonth+'-01');d.setMonth(d.getMonth()+1);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');})();
+  document.getElementById('predict-month-label').textContent='棰勮'+nextMonth.replace('-','骞?)+'鏈堟€绘敮鍑?;
+
+  if(pastMonths.length===0||pastMonths.every(m=>getMonthRecords(m).length===0)){
+    document.getElementById('predict-empty').classList.remove('hidden');
+    document.getElementById('predict-content').classList.add('hidden');
+    return;
+  }
+  document.getElementById('predict-empty').classList.add('hidden');
+  document.getElementById('predict-content').classList.remove('hidden');
+
+  const dataMonths=pastMonths.filter(m=>getMonthRecords(m).length>0).slice(-3);
+  const allRecords=dataMonths.flatMap(m=>getMonthRecords(m));
+
+  const byCat={};
+  allRecords.forEach(r=>{
+    const cat=r.category||'鍏朵粬';
+    if(!byCat[cat]) byCat[cat]={months:{},amounts:[]};
+    const m=r.date.slice(0,7);
+    if(!byCat[cat].months[m]) byCat[cat].months[m]=0;
+    byCat[cat].months[m]+=parseFloat(r.amount)||0;
+    byCat[cat].amounts.push(parseFloat(r.amount)||0);
+  });
+
+  const predictions=[];
+  Object.entries(byCat).forEach(([name,data])=>{
+    const mk=Object.keys(data.months).sort();
+    const avgs=mk.map(m=>data.months[m]);
+    const recent=avgs[avgs.length-1]||0;
+    const prev=avgs.length>=2?avgs[avgs.length-2]:recent;
+    const trend=prev>0?((recent-prev)/prev*100):0;
+
+    const catRecords=allRecords.filter(r=>(r.category||'鍏朵粬')===name).sort((a,b)=>a.date.localeCompare(b.date));
+    let cyclicNote=null;
+    if(catRecords.length>=2&&Math.abs(trend)<10){
+      const intervals=[];
+      for(let i=1;i<catRecords.length;i++){
+        intervals.push(Math.round((new Date(catRecords[i].date)-new Date(catRecords[i-1].date))/(86400000*30)));
+      }
+      const avgInt=intervals.reduce((s,v)=>s+v,0)/intervals.length;
+      if(avgInt>=2&&intervals.every(v=>Math.abs(v-avgInt)<=1)){
+        const since=Math.round((new Date()-new Date(catRecords[catRecords.length-1].date))/(86400000*30));
+        cyclicNote={interval:Math.round(avgInt),monthsSince:since,coming:since>=avgInt-0.5};
+      }
+    }
+
+    let predicted=recent;
+    if(cyclicNote&&!cyclicNote.coming) predicted=recent*0.3;
+    if(cyclicNote&&cyclicNote.coming) predicted=recent;
+
+    let isFixed=false;
+    if(avgs.length>=2){const mean=avgs.reduce((s,v)=>s+v,0)/avgs.length;if(Math.max(...avgs.map(v=>Math.abs(v-mean)/mean))<=0.1)isFixed=true;}
+
+    predictions.push({name,predicted,recent,trend,isFixed,cyclicNote,color:(store.categories.find(c=>c.name===name)||{}).color||'#78716C'});
+  });
+
+  predictions.sort((a,b)=>b.predicted-a.predicted);
+  const totalPred=predictions.reduce((s,p)=>s+p.predicted,0);
+  const recentTotal=predictions.reduce((s,p)=>s+p.recent,0);
+  const grandTrend=recentTotal>0?((totalPred-recentTotal)/recentTotal*100):0;
+
+  document.getElementById('predict-total').textContent='楼'+Math.round(totalPred).toLocaleString();
+  document.getElementById('predict-trend').textContent='杈冭繎3鏈堝潎鍊?'+(grandTrend>=0?'鈫?:'鈫?)+Math.abs(Math.round(grandTrend))+'%';
+
+  document.getElementById('predict-categories').innerHTML=predictions.map(p=>{
+    const icon=p.trend>10?'馃搱':(p.trend<-10?'馃搲':'鉃★笍');
+    const badges=[];
+    if(p.isFixed) badges.push('<span class="text-xs bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded">鍥哄畾</span>');
+    if(p.cyclicNote) badges.push('<span class="text-xs bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded">绾?+p.cyclicNote.interval+'鏈?娆?/span>');
+    return `<div class="flex items-center gap-3"><div class="w-3 h-3 rounded-full flex-shrink-0" style="background:${p.color}"></div>
+      <div class="flex-1"><div class="flex items-center gap-1 mb-0.5"><span class="text-sm font-medium">${p.name}</span>${badges.join('')}</div>
+      <div class="text-xs text-gray-400">杩?鏈堝潎鍊?楼${Math.round(p.recent).toLocaleString()} ${icon} ${Math.abs(Math.round(p.trend))}%</div></div>
+      <span class="text-sm font-bold">楼${Math.round(p.predicted).toLocaleString()}</span></div>`;
+  }).join('');
+
+  const suggestions=[];
+  predictions.filter(p=>p.trend>20).forEach(p=>{suggestions.push(`<div class="text-sm text-gray-600 flex items-start gap-2"><span>馃敶</span><span><b>${p.name}</b>杩?鏈堟寔缁笂娑紝寤鸿鍏虫敞</span></div>`);});
+  predictions.filter(p=>p.cyclicNote&&p.cyclicNote.coming).forEach(p=>{suggestions.push(`<div class="text-sm text-gray-600 flex items-start gap-2"><span>馃攧</span><span><b>${p.name}</b>璺濅笂娆℃秷璐瑰凡${p.cyclicNote.monthsSince}涓湀锛堟甯?{p.cyclicNote.interval}涓湀/娆★級锛屼笅鏈堝彲鑳芥湁姝ゆ敮鍑?/span></div>`);});
+  if(totalPred>recentTotal*1.15) suggestions.push(`<div class="text-sm text-gray-600 flex items-start gap-2"><span>鈿狅笍</span><span>涓嬫湀棰勮鏀嚭鍋忛珮锛堣緝鍧囧€?${Math.round(grandTrend)}%锛夛紝寤鸿鎺у埗闈炲繀闇€娑堣垂</span></div>`);
+  document.getElementById('predict-no-suggestions').classList.toggle('hidden',suggestions.length>0);
+  document.getElementById('predict-suggestions').innerHTML=suggestions.join('');
+
+  const cyclicItems=predictions.filter(p=>p.cyclicNote);
+  document.getElementById('predict-no-cycles').classList.toggle('hidden',cyclicItems.length>0);
+  document.getElementById('predict-cycles').innerHTML=cyclicItems.map(p=>`
+    <div class="flex items-center justify-between text-sm"><div class="flex items-center gap-2"><div class="w-2 h-2 rounded-full" style="background:${p.color}"></div><span>${p.name}</span></div>
+    <span class="text-gray-500">绾?{p.cyclicNote.interval}鏈?娆?路 ${p.cyclicNote.coming?'<span class="text-red-500 font-medium">鍗冲皢鍒版潵</span>':'<span class="text-green-500">棰勮'+ (p.cyclicNote.interval-p.cyclicNote.monthsSince) +'涓湀鍚?/span>'}</span></div>`).join('');
+}
+
+// ==================== IMPORT ====================
+let importParsedData = [];
+let selectedPlatform = ''; // 'wechat' | 'alipay'
+
+function selectPlatform(platform) {
+  selectedPlatform = platform;
+  // Update button styles
+  document.querySelectorAll('.platform-btn').forEach(b => {
+    b.style.background = '#F3F4F6';
+    b.style.color = '#666';
+  });
+  const btn = document.querySelector('.platform-btn[data-platform="'+platform+'"]');
+  if (btn) { btn.style.background = '#ECFDF5'; btn.style.color = '#10B981'; }
+
+  // Enable file input
+  const fileInput = document.getElementById('file-input');
+  const fileLabel = document.getElementById('file-label');
+  fileInput.disabled = false;
+  fileLabel.style.background = '#10B981';
+  fileLabel.style.pointerEvents = 'auto';
+  fileLabel.style.cursor = 'pointer';
+  fileLabel.childNodes[0].textContent = platform === 'wechat' ? '閫夋嫨寰俊璐﹀崟鏂囦欢' : '閫夋嫨鏀粯瀹濊处鍗曟枃浠?;
+
+  document.getElementById('platform-hint').textContent = platform === 'wechat'
+    ? '寰俊璐﹀崟锛氫粠绗?9琛屽紑濮嬭鍙栵紝A=浜ゆ槗鏃堕棿 D=鍟嗗搧鏄庣粏 E=浜ゆ槗绫诲瀷 F=閲戦'
+    : '鏀粯瀹濊处鍗曪細浠庣25琛屽紑濮嬭鍙栵紝A=浜ゆ槗鏃堕棿 E=鍟嗗搧鏄庣粏 F=浜ゆ槗绫诲瀷 G=閲戦';
+}
+
+function handleFile(e) {
+  const file = e.target.files[0];
+  if (!file || !selectedPlatform) return;
+  document.getElementById('import-upload-area').classList.add('hidden');
+  document.getElementById('import-loading').classList.remove('hidden');
+
+  const ext = file.name.split('.').pop().toLowerCase();
+  if (ext === 'csv') {
+    const reader = new FileReader();
+    reader.onload = function(ev) {
+      const buffer = new Uint8Array(ev.target.result);
+      let text = new TextDecoder('utf-8').decode(buffer);
+      // If key Chinese headers not found, try GBK encoding (Alipay exports often use GBK)
+      if (!text.includes('浜ゆ槗鏃堕棿') && !text.includes('閲戦') && !text.includes('鍟嗗搧')) {
+        try { text = new TextDecoder('gbk').decode(buffer); } catch(_) {}
+      }
+      setTimeout(() => processImportData(parseCSV(text, selectedPlatform)), 500);
+    };
+    reader.readAsArrayBuffer(file);
+  } else if (ext === 'xlsx' || ext === 'xls') {
+    const reader = new FileReader();
+    reader.onload = function(ev) {
+      try {
+        const data = new Uint8Array(ev.target.result);
+        const wb = XLSX.read(data, {type: 'array'});
+        const sheet = wb.Sheets[wb.SheetNames[0]];
+        const csv = XLSX.utils.sheet_to_csv(sheet);
+        setTimeout(() => processImportData(parseCSV(csv, selectedPlatform)), 500);
+      } catch(ex) { processImportData(null); }
+    };
+    reader.readAsArrayBuffer(file);
+  } else {
+    processImportData(null);
+  }
+}
+
+function processImportData(result) {
+  document.getElementById('import-loading').classList.add('hidden');
+  if (!result || result.length === 0) { document.getElementById('import-error').classList.remove('hidden'); return; }
+  importParsedData = result;
+  renderImportPreview();
+}
+
+function parseCSV(text, platform) {
+  const store = getStore();
+
+  // Strip BOM
+  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+
+  const lines = text.split(/\r?\n/);
+  const colMap = detectColumns(lines, platform);
+  if (!colMap) return null;
+
+  const records = [];
+  for (let i = colMap.headerRow + 1; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+
+    const vals = parseCSVLine(line);
+    const maxCol = Math.max(colMap.date||0, colMap.desc||0, colMap.type||0, colMap.amount||0, colMap.counterparty||0);
+    if (vals.length <= maxCol) continue;
+
+    // Check transaction type - only import expenses
+    const txType = (vals[colMap.type] || '').trim();
+    if (txType && txType !== '鏀嚭' && txType !== '鏀嚭(娑堣垂)') continue;
+
+    // Parse amount
+    const amountRaw = (vals[colMap.amount] || '').trim();
+    const amount = parseFloat(amountRaw.replace(/[楼锟?\s]/g, ''));
+    if (isNaN(amount) || amount === 0) continue;
+
+    // Parse date
+    const dateRaw = (vals[colMap.date] || '').trim();
+    let dateStr = '';
+    const dm = dateRaw.match(/(\d{4})[^\d]?(\d{2})[^\d]?(\d{2})/);
+    if (dm) dateStr = dm[1] + '-' + dm[2] + '-' + dm[3];
+
+    // Description
+    const counterparty = colMap.counterparty !== undefined ? (vals[colMap.counterparty] || '').trim() : '';
+    const goodsDesc = (vals[colMap.desc] || '').trim();
+    const rawDesc = counterparty ? counterparty + ' ' + goodsDesc : goodsDesc;
+
+    // Auto classify
+    const category = autoClassify(rawDesc, store.categories);
+
+    records.push({
+      amount: Math.abs(amount),
+      category,
+      date: dateStr,
+      note: rawDesc,
+      source: platform === 'alipay' ? 'alipay' : 'wechat',
+      description: rawDesc
+    });
+  }
+
+  return records;
+}
+
+// Auto-detect header row and column positions from CSV content
+function detectColumns(lines, platform) {
+  // Column name candidates by semantic role
+  const patterns = {
+    date: ['浜ゆ槗鏃堕棿', '浜ゆ槗鏃ユ湡', '璁拌处鏃堕棿', '鏃堕棿'],
+    counterparty: ['浜ゆ槗瀵规柟', '瀵规柟', '鍟嗘埛鍚嶇О', '鍟嗘埛', '鍟嗗', '鏀舵鏂?],
+    desc: ['鍟嗗搧璇存槑', '鍟嗗搧鏄庣粏', '鍟嗗搧', '浜ゆ槗璇存槑', '璇存槑', '澶囨敞', '璇︽儏'],
+    type: ['鏀?鏀?, '鏀舵敮', '鏀跺叆/鏀嚭', '璧勯噾娴佸悜'],
+    amount: ['閲戦(鍏?', '閲戦', '浜ゆ槗閲戦(鍏?', '浜ゆ槗閲戦', '鏀嚭閲戦', '鏀跺叆閲戦']
+  };
+
+  const searchLimit = Math.min(lines.length, 60);
+  let bestRow = -1;
+  let bestCols = null;
+  let bestScore = 0;
+
+  for (let i = 0; i < searchLimit; i++) {
+    const vals = parseCSVLine(lines[i].trim());
+    if (vals.length < 2) continue;
+
+    const cols = {};
+    let score = 0;
+
+    for (let j = 0; j < vals.length; j++) {
+      const v = vals[j].replace(/"/g, '').trim();
+      for (const [role, keywords] of Object.entries(patterns)) {
+        if (cols[role] !== undefined) continue; // already matched
+        for (const kw of keywords) {
+          if (v === kw || v.startsWith(kw)) {
+            cols[role] = j;
+            score += keywords.length - keywords.indexOf(kw); // earlier keywords = higher score
+            break;
+          }
+        }
+      }
+    }
+
+    // Require at least date + amount; prefer rows with more columns matched
+    if (cols.date !== undefined && cols.amount !== undefined && score > bestScore) {
+      bestRow = i;
+      bestCols = cols;
+      bestScore = score;
+    }
+  }
+
+  // Fallback: if no desc column found, try treating "璇存槑" as desc
+  if (bestCols && bestCols.desc === undefined) {
+    // Try broader match on the header row
+    const vals = parseCSVLine(lines[bestRow].trim());
+    for (let j = 0; j < vals.length; j++) {
+      const v = vals[j].replace(/"/g, '').trim();
+      if (bestCols.desc === undefined && (v.includes('璇存槑') || v.includes('鍟嗗搧') || v.includes('澶囨敞'))) {
+        bestCols.desc = j;
+      }
+    }
+  }
+
+  if (!bestCols || bestCols.date === undefined || bestCols.amount === undefined) return null;
+
+  bestCols.headerRow = bestRow;
+
+  // Ensure desc falls back to a reasonable column if not found
+  if (bestCols.desc === undefined) {
+    // Use counterparty if available, otherwise try column after date
+    bestCols.desc = bestCols.counterparty !== undefined ? bestCols.counterparty : bestCols.date + 1;
+  }
+
+  // Ensure type column has a default (not strictly required)
+  if (bestCols.type === undefined) bestCols.type = -1;
+
+  // For Alipay only: also try to detect counterparty/merchant column
+  if (platform === 'alipay' && bestCols.counterparty === undefined) {
+    const vals = parseCSVLine(lines[bestRow].trim());
+    for (let j = 0; j < vals.length; j++) {
+      const v = vals[j].replace(/"/g, '').trim();
+      if (v.includes('鍟嗘埛') || v.includes('瀵规柟') || v.includes('鍟嗗')) {
+        bestCols.counterparty = j;
+        break;
+      }
+    }
+  }
+
+  return bestCols;
+}
+
+// Parse a single CSV line that may contain quoted fields with commas inside
+function parseCSVLine(line) {
+  const result = [];
+  let current = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') {
+      inQuotes = !inQuotes;
+    } else if (ch === ',' && !inQuotes) {
+      result.push(current);
+      current = '';
+    } else {
+      current += ch;
+    }
+  }
+  result.push(current);
+  return result;
+}
+
+function autoClassify(desc,categories) {
+  if(!desc) return '鍏朵粬';
+  const lower=desc.toLowerCase();
+  for(const cat of categories){if(!cat.keywords||cat.keywords.length===0) continue;for(const kw of cat.keywords){if(lower.includes(kw.toLowerCase())) return cat.name;}}
+  return '鍏朵粬';
+}
+
+function renderImportPreview() {
+  document.getElementById('import-preview').classList.remove('hidden');
+  document.getElementById('import-count').textContent=importParsedData.length;
+  const auto=importParsedData.filter(r=>r.category!=='鍏朵粬').length;
+  document.getElementById('import-auto-rate').textContent='鑷姩鍒嗙被鐜?'+Math.round(auto/importParsedData.length*100)+'%';
+  const store=getStore();
+  document.getElementById('import-items').innerHTML=importParsedData.map((r,i)=>{
+    const catOpts=store.categories.map(c=>`<option value="${c.name}" ${c.name===r.category?'selected':''}>${c.name}</option>`).join('');
+    return `<div class="flex items-center gap-2 py-2 border-b border-gray-50 text-sm">
+      <span class="text-xs text-gray-400 w-5">${i+1}</span>
+      <span class="flex-1 truncate text-gray-600 max-w-[120px]" title="${r.description}">${r.description||'鏃犳弿杩?}</span>
+      <span class="font-medium text-gray-700">楼${r.amount.toFixed(2)}</span>
+      <span class="text-xs text-gray-400">${r.date?.slice(5)||''}</span>
+      <select class="text-xs bg-gray-50 rounded-lg px-1 py-1 border-none" onchange="importParsedData[${i}].category=this.value">${catOpts}</select>
+      <button onclick="importParsedData.splice(${i},1);renderImportPreview()" class="text-gray-400 hover:text-red-400">鉁?/button></div>`;
+  }).join('');
+}
+
+function cancelImport(){importParsedData=[];resetImport();}
+function confirmImport(){
+  const store=getStore();
+  importParsedData.forEach(r=>{store.records.push({id:Date.now()+Math.random()*10000,amount:r.amount,category:r.category,date:r.date||new Date().toISOString().slice(0,10),note:r.description||r.note||'',source:r.source||'csv'});});
+  saveStore(store);
+  document.getElementById('import-preview').classList.add('hidden');
+  document.getElementById('import-success').classList.remove('hidden');
+  document.getElementById('import-success-msg').textContent='鎴愬姛瀵煎叆 '+importParsedData.length+' 绗旀秷璐硅褰?;
+  importParsedData=[];
+}
+function resetImport(){
+  importParsedData=[];
+  selectedPlatform='';
+  document.getElementById('import-upload-area').classList.remove('hidden');
+  ['import-loading','import-preview','import-success','import-error'].forEach(id=>document.getElementById(id).classList.add('hidden'));
+  document.getElementById('file-input').value='';
+  document.getElementById('file-input').disabled=true;
+  const fileLabel=document.getElementById('file-label');
+  fileLabel.style.background='#D1D5DB';
+  fileLabel.style.pointerEvents='none';
+  fileLabel.style.cursor='default';
+  fileLabel.childNodes[0].textContent='璇峰厛閫夋嫨鏉ユ簮';
+  document.getElementById('platform-hint').textContent='璇峰厛閫夋嫨璐﹀崟鏉ユ簮';
+  document.querySelectorAll('.platform-btn').forEach(b=>{b.style.background='#F3F4F6';b.style.color='#666';});
+}
+
+// ==================== HISTORY ====================
+let deleteTargetId=null;
+let editTargetId=null;
+let historyMonth = getCurrentMonth();
+const HISTORY_PAGE_SIZE = 20;
+let historyPage = 0;
+let historyFilteredRecords = [];
+let historyDateFrom = '';
+let historyDateTo = '';
+let historySelectedDay = null; // 'YYYY-MM-DD' or null
+
+function historyMonthNav(dir) {
+  const d = new Date(historyMonth+'-01');
+  d.setMonth(d.getMonth()+dir);
+  historyMonth = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+  historyPage = 0;
+  historySelectedDay = null;
+  // Sync date range fields to month
+  historyDateFrom = historyMonth+'-01';
+  const lastDay = new Date(d.getFullYear(),d.getMonth()+1,0).getDate();
+  historyDateTo = historyMonth+'-'+String(lastDay).padStart(2,'0');
+  document.getElementById('history-date-from').value = historyDateFrom;
+  document.getElementById('history-date-to').value = historyDateTo;
+  updateDateRangeClearBtn();
+  renderHistory();
+}
+
+function selectTrendMonth(month) {
+  historyMonth = month;
+  historyPage = 0;
+  historySelectedDay = null;
+  const d = new Date(month+'-01');
+  const lastDay = new Date(d.getFullYear(),d.getMonth()+1,0).getDate();
+  historyDateFrom = month+'-01';
+  historyDateTo = month+'-'+String(lastDay).padStart(2,'0');
+  document.getElementById('history-date-from').value = historyDateFrom;
+  document.getElementById('history-date-to').value = historyDateTo;
+  updateDateRangeClearBtn();
+  renderHistory();
+}
+
+function selectCalendarDay(dateStr) {
+  if (historySelectedDay === dateStr) {
+    // Deselect 鈥?return to full month view
+    historySelectedDay = null;
+    historyDateFrom = historyMonth+'-01';
+    const d = new Date(historyMonth+'-01');
+    const lastDay = new Date(d.getFullYear(),d.getMonth()+1,0).getDate();
+    historyDateTo = historyMonth+'-'+String(lastDay).padStart(2,'0');
+  } else {
+    // Select this day
+    historySelectedDay = dateStr;
+    historyDateFrom = dateStr;
+    historyDateTo = dateStr;
+  }
+  document.getElementById('history-date-from').value = historyDateFrom;
+  document.getElementById('history-date-to').value = historyDateTo;
+  updateDateRangeClearBtn();
+  historyPage = 0;
+  renderHistory();
+}
+
+function onDateRangeChange() {
+  historyDateFrom = document.getElementById('history-date-from').value;
+  historyDateTo = document.getElementById('history-date-to').value;
+  historySelectedDay = null;
+  updateDateRangeClearBtn();
+  historyPage = 0;
+  renderHistory();
+}
+
+function clearDateRange() {
+  historyDateFrom = '';
+  historyDateTo = '';
+  historySelectedDay = null;
+  document.getElementById('history-date-from').value = '';
+  document.getElementById('history-date-to').value = '';
+  updateDateRangeClearBtn();
+  historyPage = 0;
+  renderHistory();
+}
+
+function updateDateRangeClearBtn() {
+  const has = !!(historyDateFrom || historyDateTo);
+  document.getElementById('clear-date-range-btn').style.display = has ? '' : 'none';
+}
+
+function renderHistory() {
+  const store=getStore();
+  const search=(document.getElementById('history-search')?.value||'').toLowerCase();
+  const filterCat=document.getElementById('history-filter-cat')?.value||'';
+
+  document.getElementById('history-filter-cat').innerHTML='<option value="">鍏ㄩ儴鍒嗙被</option>'+store.categories.map(c=>`<option value="${c.name}">${c.name}</option>`).join('');
+  document.getElementById('history-month-label').textContent=historyMonth.replace('-','骞?)+'鏈?;
+
+  // Sync date range defaults to month if not set
+  if (!historyDateFrom && !historyDateTo) {
+    const d = new Date(historyMonth+'-01');
+    const lastDay = new Date(d.getFullYear(),d.getMonth()+1,0).getDate();
+    historyDateFrom = historyMonth+'-01';
+    historyDateTo = historyMonth+'-'+String(lastDay).padStart(2,'0');
+    document.getElementById('history-date-from').value = historyDateFrom;
+    document.getElementById('history-date-to').value = historyDateTo;
+  }
+
+  // Monthly trend bars 鈥?clickable to switch months
+  const months=getRecentMonths(6).reverse();
+  const trendData=months.map(m=>({month:m.slice(5),total:getMonthTotal(m),fullMonth:m}));
+  const maxVal=Math.max(...trendData.map(d=>d.total),1);
+  document.getElementById('trend-bars').innerHTML=trendData.map(d=>{
+    const h=Math.max(4,(d.total/maxVal)*160);
+    const isActive = d.fullMonth === historyMonth;
+    return `<div class="flex-1 flex flex-col items-center gap-1 cursor-pointer" onclick="selectTrendMonth('${d.fullMonth}')">
+      <span class="text-xs font-medium ${isActive?'text-primary font-bold':'text-gray-500'}">楼${Math.round(d.total)}</span>
+      <div class="w-full rounded-t-md transition-all ${isActive?'ring-2 ring-primary ring-offset-1':''}" style="height:${h}px;background:linear-gradient(180deg,#10B981,#34D399);min-width:20px;"></div>
+    </div>`;
+  }).join('');
+  document.getElementById('trend-labels').innerHTML=trendData.map(d=>{
+    const isActive = d.fullMonth === historyMonth;
+    return `<span class="flex-1 text-center cursor-pointer ${isActive?'text-primary font-semibold':'text-gray-400'}" onclick="selectTrendMonth('${d.fullMonth}')">${d.month}鏈?/span>`;
+  }).join('');
+
+  // Calendar heatmap for the selected month
+  renderCalendar(historyMonth);
+
+  // Filter by date range + search + category
+  let records = store.records.slice();
+  if (historyDateFrom) records = records.filter(r => r.date >= historyDateFrom);
+  if (historyDateTo) records = records.filter(r => r.date <= historyDateTo);
+  if (search) records = records.filter(r => (r.note||'').toLowerCase().includes(search) || (r.category||'').toLowerCase().includes(search));
+  if (filterCat) records = records.filter(r => r.category === filterCat);
+  records.sort((a,b)=>b.date.localeCompare(a.date));
+
+  historyFilteredRecords = records;
+  historyPage = 0;
+  const total = records.length;
+  const sum = records.reduce((s,r)=>s+(parseFloat(r.amount)||0),0);
+  document.getElementById('history-count').textContent = total;
+  document.getElementById('history-sum').textContent = sum.toLocaleString(undefined,{minimumFractionDigits:2});
+  renderHistoryPage();
+}
+
+function renderCalendar(month) {
+  const store = getStore();
+  const [y,m] = month.split('-').map(Number);
+  const firstDay = new Date(y,m-1,1).getDay();
+  const daysInMonth = new Date(y,m,0).getDate();
+
+  // Calculate daily totals
+  const dailyTotals = {};
+  for (let d=1; d<=daysInMonth; d++) {
+    const dateStr = month+'-'+String(d).padStart(2,'0');
+    dailyTotals[dateStr] = getMonthRecords(month).filter(r => r.date === dateStr).reduce((s,r)=>s+(parseFloat(r.amount)||0),0);
+  }
+  const maxDaily = Math.max(...Object.values(dailyTotals), 1);
+
+  document.getElementById('cal-month-label').textContent = month.replace('-','骞?)+'鏈?;
+
+  let html = '';
+  for (let i=0; i<firstDay; i++) html += '<div></div>';
+  for (let d=1; d<=daysInMonth; d++) {
+    const dateStr = month+'-'+String(d).padStart(2,'0');
+    const val = dailyTotals[dateStr] || 0;
+    let bg = 'bg-gray-100';
+    if (val > 0) {
+      const intensity = val / maxDaily;
+      if (intensity < 0.25) bg = 'bg-green-200';
+      else if (intensity < 0.6) bg = 'bg-green-400';
+      else bg = 'bg-green-600 text-white';
+    }
+    const display = val > 0 ? '楼'+Math.round(val) : '';
+    const isSelected = historySelectedDay === dateStr;
+    html += `<div class="aspect-square rounded-md ${bg} flex flex-col items-center justify-center text-[10px] leading-tight font-medium cursor-pointer hover:opacity-80 transition-opacity ${isSelected?'ring-2 ring-offset-1 ring-primary':''}" title="${dateStr}: 楼${val.toFixed(2)}${isSelected?' (宸查€変腑)':''}" onclick="selectCalendarDay('${dateStr}')">
+      <span class="text-[9px] opacity-70">${d}</span>
+      ${display ? `<span class="truncate max-w-full px-0.5">${display}</span>` : ''}
+    </div>`;
+  }
+  document.getElementById('calendar-grid').innerHTML = html;
+}
+
+function renderHistoryPage() {
+  const records = historyFilteredRecords;
+  const start = historyPage * HISTORY_PAGE_SIZE;
+  const pageRecords = records.slice(start, start + HISTORY_PAGE_SIZE);
+  const hasMore = start + HISTORY_PAGE_SIZE < records.length;
+
+  document.getElementById('history-empty').classList.toggle('hidden', records.length > 0);
+  document.getElementById('history-list').innerHTML = pageRecords.length===0 ? '' : pageRecords.map(r=>{
+    const cat=getStore().categories.find(c=>c.name===r.category)||{};
+    return `<div class="flex items-center justify-between py-3 border-b border-gray-50 cursor-pointer hover:bg-gray-50 rounded-lg px-1 transition-colors" onclick="openEditRecord(${r.id})">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold" style="background:${cat.color||'#78716C'}">${(r.category||'鍏朵粬')[0]}</div>
+        <div><div class="flex items-center gap-2"><span class="text-sm font-medium">${r.category||'鍏朵粬'}</span>${r.source!=='manual'?'<span class="text-xs bg-gray-100 text-gray-500 px-1 rounded">'+(r.source==='alipay'?'鏀粯瀹?:(r.source==='wechat'?'寰俊':'瀵煎叆'))+'</span>':''}</div>
+        <p class="text-xs text-gray-400">${r.date?.slice(5)||''} ${r.note||''}</p></div>
+      </div>
+      <div class="flex items-center gap-2"><span class="text-sm font-semibold">-楼${parseFloat(r.amount).toFixed(2)}</span>
+      <button onclick="event.stopPropagation();deleteTargetId=${r.id};showModal('delete-confirm-modal')" class="text-gray-300 hover:text-red-400 text-sm">馃棏</button></div></div>`;
+  }).join('');
+
+  const loadMoreBtn = document.getElementById('history-load-more');
+  if (hasMore) {
+    loadMoreBtn.classList.remove('hidden');
+    loadMoreBtn.textContent = `鍔犺浇鏇村锛?{start + HISTORY_PAGE_SIZE}/${records.length}锛塦;
+  } else {
+    loadMoreBtn.classList.add('hidden');
+  }
+  document.getElementById('history-page-info').textContent = records.length > HISTORY_PAGE_SIZE ? `${Math.min(start+HISTORY_PAGE_SIZE, records.length)}/${records.length}` : '';
+}
+
+function loadMoreHistory() {
+  historyPage++;
+  const records = historyFilteredRecords;
+  const start = historyPage * HISTORY_PAGE_SIZE;
+  const pageRecords = records.slice(start, start + HISTORY_PAGE_SIZE);
+  const hasMore = start + HISTORY_PAGE_SIZE < records.length;
+
+  const store=getStore();
+  const listEl = document.getElementById('history-list');
+  listEl.innerHTML += pageRecords.map(r=>{
+    const cat=store.categories.find(c=>c.name===r.category)||{};
+    return `<div class="flex items-center justify-between py-3 border-b border-gray-50 cursor-pointer hover:bg-gray-50 rounded-lg px-1 transition-colors" onclick="openEditRecord(${r.id})">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold" style="background:${cat.color||'#78716C'}">${(r.category||'鍏朵粬')[0]}</div>
+        <div><div class="flex items-center gap-2"><span class="text-sm font-medium">${r.category||'鍏朵粬'}</span>${r.source!=='manual'?'<span class="text-xs bg-gray-100 text-gray-500 px-1 rounded">'+(r.source==='alipay'?'鏀粯瀹?:(r.source==='wechat'?'寰俊':'瀵煎叆'))+'</span>':''}</div>
+        <p class="text-xs text-gray-400">${r.date?.slice(5)||''} ${r.note||''}</p></div>
+      </div>
+      <div class="flex items-center gap-2"><span class="text-sm font-semibold">-楼${parseFloat(r.amount).toFixed(2)}</span>
+      <button onclick="event.stopPropagation();deleteTargetId=${r.id};showModal('delete-confirm-modal')" class="text-gray-300 hover:text-red-400 text-sm">馃棏</button></div></div>`;
+  }).join('');
+
+  const loadMoreBtn = document.getElementById('history-load-more');
+  if (hasMore) {
+    loadMoreBtn.classList.remove('hidden');
+    loadMoreBtn.textContent = `鍔犺浇鏇村锛?{start + HISTORY_PAGE_SIZE}/${records.length}锛塦;
+  } else {
+    loadMoreBtn.classList.add('hidden');
+  }
+  document.getElementById('history-page-info').textContent = `${Math.min(start+HISTORY_PAGE_SIZE, records.length)}/${records.length}`;
+}
+
+function confirmDelete(){
+  if(!deleteTargetId) return;
+  const store=getStore();
+  store.records=store.records.filter(r=>r.id!==deleteTargetId);
+  saveStore(store); deleteTargetId=null;
+  hideModal('delete-confirm-modal');
+  renderHistory(); renderHome(); showToast('宸插垹闄?);
+}
+
+function openEditRecord(id){
+  const store = getStore();
+  const r = store.records.find(r=>r.id===id);
+  if(!r) return;
+  editTargetId = id;
+  // Populate category dropdown
+  document.getElementById('edit-category').innerHTML = store.categories.map(c=>`<option value="${c.name}" ${c.name===r.category?'selected':''}>${c.name}</option>`).join('');
+  document.getElementById('edit-amount').value = parseFloat(r.amount)||0;
+  document.getElementById('edit-date').value = r.date||'';
+  document.getElementById('edit-note').value = r.note||'';
+  showModal('edit-record-modal');
+}
+
+function confirmEdit(){
+  if(!editTargetId) return;
+  const store = getStore();
+  const r = store.records.find(r=>r.id===editTargetId);
+  if(!r) return;
+  r.category = document.getElementById('edit-category').value;
+  r.amount = parseFloat(document.getElementById('edit-amount').value)||0;
+  r.date = document.getElementById('edit-date').value;
+  r.note = document.getElementById('edit-note').value.trim();
+  saveStore(store); editTargetId=null;
+  hideModal('edit-record-modal');
+  renderHistory(); renderHome(); showToast('宸蹭繚瀛?);
+}
+
+// ==================== SETTINGS ====================
+
+function renderSettings() {
+  const store=getStore();
+  // Global threshold
+  document.getElementById('global-threshold').value=(store.settings||{}).threshold||80;
+  document.getElementById('global-threshold-val').textContent=(store.settings||{}).threshold+'%'||'80%';
+
+  // Current month only
+  const m = getCurrentMonth();
+  const b = store.budgets[m] || {};
+  const total = getMonthTotal(m);
+  document.getElementById('settings-cur-month-label').textContent = m.replace('-','骞?)+'鏈?;
+  document.getElementById('settings-cur-budget').value = b.amount || '';
+  document.getElementById('settings-cur-spent').textContent = '宸茶姳 楼'+Math.round(total).toLocaleString();
+}
+
+function renderAllMonthsBudgetModal() {
+  const store=getStore();
+  // Include past 12 months + current + future 12 months
+  const pastMonths = getRecentMonths(13); // 12 past + current
+  const futureMonths = [];
+  const cur = getCurrentMonth();
+  for (let i = 1; i <= 12; i++) {
+    const d = new Date(cur+'-01');
+    d.setMonth(d.getMonth() + i);
+    futureMonths.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'));
+  }
+  const months = [...new Set([...pastMonths, ...futureMonths])].sort();
+  document.getElementById('all-months-budget-list').innerHTML = months.map(m=>{
+    const b=store.budgets[m]||{};
+    const amount=b.amount||'';
+    const total=getMonthTotal(m);
+    const isCurrent=m===getCurrentMonth();
+    return `<div class="flex items-center gap-3 py-2 border-b border-gray-100 last:border-0">
+      <span class="text-sm font-medium text-gray-700 w-20">${m.replace('-','骞?)}鏈?{isCurrent?'<span class="text-xs text-primary ml-1">路 褰撳墠</span>':''}</span>
+      <div class="flex-1 flex items-center gap-2">
+        <span class="text-gray-300 text-sm">楼</span>
+        <input type="number" value="${amount}" placeholder="鏈缃? class="all-month-budget-input flex-1 bg-gray-50 rounded-lg px-3 py-2 text-sm border-none text-right font-medium" data-month="${m}" step="0.01" min="0" />
+      </div>
+      <span class="text-xs text-gray-400 w-16 text-right">宸茶姳 楼${Math.round(total)}</span>
+    </div>`;
+  }).join('');
+}
+
+function saveAllMonthsFromModal() {
+  const store=getStore();
+  document.querySelectorAll('.all-month-budget-input').forEach(inp=>{
+    const m=inp.dataset.month;
+    const v=parseFloat(inp.value);
+    if(v&&v>0){if(!store.budgets[m])store.budgets[m]={};store.budgets[m].amount=v;}
+  });
+  store.settings.threshold=parseInt(document.getElementById('global-threshold').value);
+  saveStore(store);
+  hideModal('all-months-budget-modal');
+  renderSettings();
+  showToast('棰勭畻璁剧疆宸蹭繚瀛?);
+}
+
+// Save individual month budgets from the inputs
+function saveAllMonthBudgets() {
+  const store=getStore();
+  document.querySelectorAll('.month-budget-input').forEach(inp=>{
+    const m=inp.dataset.month;
+    const v=parseFloat(inp.value);
+    if(v&&v>0){if(!store.budgets[m])store.budgets[m]={};store.budgets[m].amount=v;}
+  });
+  store.settings.threshold=parseInt(document.getElementById('global-threshold').value);
+  saveStore(store);
+  showToast('璁剧疆宸蹭繚瀛?);
+}
+
+// Single month modal
+let budgetModalMonth='';
+function openBudgetForMonth(month) {
+  budgetModalMonth=month;
+  const store=getStore();
+  document.getElementById('budget-modal-month').textContent=month.replace('-','骞?)+'鏈?;
+  document.getElementById('modal-budget-amount').value=(store.budgets[month]||{}).amount||'';
+  const pastMonths=getRecentMonths(7).filter(m=>m<month).slice(0,3);
+  let t=0,c=0;
+  pastMonths.forEach(m=>{const v=getMonthTotal(m);if(v>0){t+=v;c++;}});
+  document.getElementById('avg-spending-hint').textContent=c>0?'楼'+(t/c).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}):'鏆傛棤鏁版嵁';
+  showModal('budget-modal');
+}
+
+function saveBudgetFromModal() {
+  const amount=parseFloat(document.getElementById('modal-budget-amount').value);
+  if(!amount||amount<=0){showToast('璇疯緭鍏ユ湁鏁堥噾棰?);return;}
+  const store=getStore();
+  if(!store.budgets[budgetModalMonth]) store.budgets[budgetModalMonth]={};
+  store.budgets[budgetModalMonth].amount=amount;
+  // Also save threshold if changed
+  store.settings.threshold=parseInt(document.getElementById('global-threshold').value);
+  saveStore(store);
+  hideModal('budget-modal');
+  if(budgetModalMonth===viewingMonth) renderHome();
+  renderSettings();
+  showToast(budgetModalMonth.replace('-','骞?)+'鏈堥绠楀凡淇濆瓨');
+}
+
+// Batch budget
+let selectedBatchRange = '3m';
+let selectedBatchDir = 'forward'; // 'forward' = future, 'backward' = past
+
+function showBatchBudgetModal() {
+  selectedBatchRange = '3m';
+  selectedBatchDir = 'forward';
+  document.getElementById('batch-budget-amount').value='';
+  document.getElementById('batch-custom-months').classList.add('hidden');
+  // Reset range buttons
+  document.querySelectorAll('.batch-range-btn').forEach(b=>{b.style.background='#F3F4F6';b.style.color='#666';});
+  const defaultBtn = document.querySelector('.batch-range-btn[data-range="3m"]');
+  if(defaultBtn){defaultBtn.style.background='#ECFDF5';defaultBtn.style.color='#10B981';}
+  // Reset direction buttons
+  document.querySelectorAll('.batch-dir-btn').forEach(b=>{b.style.background='#F3F4F6';b.style.color='#666';});
+  const dirBtn = document.querySelector('.batch-dir-btn[data-dir="forward"]');
+  if(dirBtn){dirBtn.style.background='#ECFDF5';dirBtn.style.color='#10B981';}
+  updateBatchDesc();
+  // Prepare custom checkboxes (past + future months)
+  const pastMonths2 = getRecentMonths(13);
+  const futureMonths2 = [];
+  const cur2 = getCurrentMonth();
+  for (let i=1;i<=12;i++){const d=new Date(cur2+'-01');d.setMonth(d.getMonth()+i);futureMonths2.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'));}
+  const allMonths = [...new Set([...pastMonths2,...futureMonths2])].sort();
+  document.getElementById('batch-month-checkboxes').innerHTML = allMonths.map(m=>
+    `<label class="flex items-center gap-1.5 text-sm bg-gray-50 rounded-full px-3 py-1.5 cursor-pointer hover:bg-gray-100">
+      <input type="checkbox" value="${m}" class="batch-month-cb accent-primary" />${m.replace('-','.')}
+    </label>`
+  ).join('');
+  // Show direction row only for presets, not custom
+  document.getElementById('batch-direction-row').style.display = '';
+  showModal('batch-budget-modal');
+}
+
+function selectBatchRange(range) {
+  selectedBatchRange = range;
+  document.querySelectorAll('.batch-range-btn').forEach(b=>{b.style.background='#F3F4F6';b.style.color='#666';});
+  const btn = document.querySelector('.batch-range-btn[data-range="'+range+'"]');
+  if(btn){btn.style.background='#ECFDF5';btn.style.color='#10B981';}
+  document.getElementById('batch-custom-months').classList.toggle('hidden', range!=='custom');
+  document.getElementById('batch-direction-row').style.display = range==='custom' ? 'none' : '';
+  updateBatchDesc();
+}
+
+function selectBatchDir(dir) {
+  selectedBatchDir = dir;
+  document.querySelectorAll('.batch-dir-btn').forEach(b=>{b.style.background='#F3F4F6';b.style.color='#666';});
+  const btn = document.querySelector('.batch-dir-btn[data-dir="'+dir+'"]');
+  if(btn){btn.style.background='#ECFDF5';btn.style.color='#10B981';}
+  updateBatchDesc();
+}
+
+function updateBatchDesc() {
+  if (selectedBatchRange === 'custom') {
+    document.getElementById('batch-range-desc').textContent = '鍕鹃€夐渶瑕佹壒閲忚缃殑鏈堜唤';
+    return;
+  }
+  const n = selectedBatchRange==='3m'?3:(selectedBatchRange==='6m'?6:12);
+  const dirLabel = selectedBatchDir==='forward' ? '鏈潵' : '杩囧幓';
+  document.getElementById('batch-range-desc').textContent = `灏嗛绠楀簲鐢ㄥ埌褰撳墠鏈堝強${dirLabel}${n-1}涓湀锛堝叡${n}涓湀锛塦;
+}
+
+function getBatchMonths() {
+  if (selectedBatchRange === 'custom') {
+    const months = [];
+    document.querySelectorAll('.batch-month-cb:checked').forEach(cb => months.push(cb.value));
+    return months;
+  }
+  const n = selectedBatchRange==='3m'?3:(selectedBatchRange==='6m'?6:12);
+  const cur = getCurrentMonth();
+  const result = [];
+  for (let i = 0; i < n; i++) {
+    const d = new Date(cur+'-01');
+    if (selectedBatchDir === 'forward') {
+      d.setMonth(d.getMonth() + i);
+    } else {
+      d.setMonth(d.getMonth() - i);
+    }
+    result.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'));
+  }
+  return result.sort();
+}
+
+function saveBatchBudgets() {
+  const amount=parseFloat(document.getElementById('batch-budget-amount').value);
+  if(!amount||amount<=0){showToast('璇疯緭鍏ユ湁鏁堥噾棰?);return;}
+
+  const months = getBatchMonths();
+  if (months.length===0) { showToast('璇疯嚦灏戦€夋嫨涓€涓湀'); return; }
+
+  const store=getStore();
+  months.forEach(m=>{if(!store.budgets[m])store.budgets[m]={};store.budgets[m].amount=amount;});
+  saveStore(store);
+  hideModal('batch-budget-modal');
+  renderSettings();
+  if (viewingMonth && months.includes(viewingMonth)) renderHome();
+  showToast('宸叉壒閲忚缃?'+months.length+' 涓湀棰勭畻');
+}
+
+// Auto-save when switching tabs from settings
+const origSwitchTab=switchTab;
+switchTab=function(tab) {
+  // Save settings if leaving settings page
+  if(document.getElementById('page-settings').classList.contains('active')) {
+    const store=getStore();
+    // Save current month budget
+    const curBudget = parseFloat(document.getElementById('settings-cur-budget').value);
+    const curMonth = getCurrentMonth();
+    if (curBudget && curBudget > 0) {
+      if (!store.budgets[curMonth]) store.budgets[curMonth] = {};
+      store.budgets[curMonth].amount = curBudget;
+    }
+    store.settings.threshold = parseInt(document.getElementById('global-threshold').value);
+    saveStore(store);
+  }
+  origSwitchTab(tab);
+};
+
+// ==================== CATEGORY MANAGEMENT ====================
+let deleteCatIdx=null;
+
+function renderCategoryManage() {
+  const store=getStore();
+  document.getElementById('category-manage-list').innerHTML=store.categories.map((cat,i)=>`
+    <div class="bg-gray-50 rounded-xl p-3">
+      <div class="flex items-center gap-3 mb-2">
+        <div class="w-6 h-6 rounded-full flex-shrink-0" style="background:${cat.color}"></div>
+        <input type="text" value="${cat.name}" class="cat-name-input flex-1 bg-white rounded-lg px-3 py-1.5 text-sm border-none" data-idx="${i}" />
+        <input type="color" value="${cat.color}" class="cat-color-input w-8 h-8 rounded cursor-pointer border-0 flex-shrink-0" data-idx="${i}" />
+        <button onclick="deleteCatIdx=${i};showModal('delete-cat-confirm-modal')" class="text-gray-400 hover:text-red-400 text-sm flex-shrink-0">馃棏</button>
+      </div>
+      <input type="text" value="${(cat.keywords||[]).join('銆?)}" class="cat-kw-input w-full bg-white rounded-lg px-3 py-1.5 text-xs text-gray-500 border-none" data-idx="${i}" placeholder="鍏抽敭璇嶏紝鐢ㄩ】鍙峰垎闅? />
+    </div>
+  `).join('');
+}
+
+function confirmDeleteCategory() {
+  if(deleteCatIdx===null) return;
+  const store=getStore();
+  if(store.categories.length<=2){hideModal('delete-cat-confirm-modal');showToast('鑷冲皯淇濈暀涓や釜鍒嗙被');return;}
+  store.categories.splice(deleteCatIdx,1);
+  saveStore(store);
+  deleteCatIdx=null;
+  hideModal('delete-cat-confirm-modal');
+  renderCategoryManage();
+  showToast('鍒嗙被宸插垹闄?);
+}
+
+function saveCategories() {
+  const store=getStore();
+  document.querySelectorAll('.cat-name-input').forEach(inp=>{const i=parseInt(inp.dataset.idx);if(store.categories[i])store.categories[i].name=inp.value;});
+  document.querySelectorAll('.cat-color-input').forEach(inp=>{const i=parseInt(inp.dataset.idx);if(store.categories[i])store.categories[i].color=inp.value;});
+  document.querySelectorAll('.cat-kw-input').forEach(inp=>{const i=parseInt(inp.dataset.idx);if(store.categories[i])store.categories[i].keywords=inp.value.split(/[銆?锛宂/).map(s=>s.trim()).filter(Boolean);});
+  saveStore(store);
+  hideModal('category-manage-modal');
+  showToast('鍒嗙被宸叉洿鏂?);
+}
+
+function addCategory() {
+  const store=getStore();
+  store.categories.push({name:'鏂板垎绫?,color:CAT_COLORS[store.categories.length%CAT_COLORS.length],keywords:[]});
+  saveStore(store);
+  renderCategoryManage();
+}
+
+// ==================== DATA MANAGEMENT ====================
+function exportData() {
+  const store=getStore();
+  const blob=new Blob([JSON.stringify(store,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download='budget_backup_'+new Date().toISOString().slice(0,10)+'.json';a.click();
+  URL.revokeObjectURL(url);
+  showToast('鏁版嵁宸插鍑?);
+}
+
+function importData(e) {
+  const file=e.target.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=function(ev){
+    try{const data=JSON.parse(ev.target.result);if(!data.records||!data.categories){showToast('鏁版嵁鏍煎紡涓嶆纭?);return;}saveStore(data);renderHome();renderSettings();showToast('鏁版嵁宸叉仮澶?);}
+    catch(ex){showToast('鏂囦欢鏍煎紡閿欒');}
+  };
+  reader.readAsText(file);
+}
+
+function clearAllData() {
+  localStorage.removeItem('budget_app_data_v2');
+  hideModal('clear-confirm-modal');
+  viewingMonth=getCurrentMonth();
+  renderHome();renderSettings();showToast('鎵€鏈夋暟鎹凡娓呯┖');
+}
+
+// ==================== UTILS ====================
+function showToast(msg) {
+  const el=document.getElementById('toast');
+  el.textContent=msg;el.classList.add('show');
+  setTimeout(()=>el.classList.remove('show'),2000);
+}
+
+function checkFocusMode() {
+  const params=new URLSearchParams(window.location.search);
+  const focus=params.get('focus');
+  if(focus){
+    document.body.classList.add('focus-mode');
+    const map={home:'page-home',predict:'page-predict',import:'page-import',history:'page-history',settings:'page-settings',record:'page-record'};
+    Object.values(map).forEach(id=>{const el=document.getElementById(id);if(el)el.classList.add('focus-disabled');});
+    const target=document.getElementById(map[focus]);
+    if(target){target.classList.remove('focus-disabled');target.classList.add('active');}
+    document.querySelector('.tab-bar')?.classList.add('focus-disabled');
+    document.getElementById('fab-btn')?.classList.add('focus-disabled');
+    document.getElementById('page-home')?.classList.remove('active');
+  }
+}
+
+// ==================== INIT ====================
+function init() {
+  const store=getStore();
+  if(store.records.length===0){
+    const samples=[
+      {amount:3000,category:'鎴跨',date:'2026-05-01',note:'5鏈堟埧绉?,source:'manual'},
+      {amount:185.60,category:'姘寸數璐?,date:'2026-05-03',note:'鐢佃垂缂磋垂',source:'manual'},
+      {amount:45,category:'椁愰ギ',date:'2026-05-04',note:'鍗堥澶栧崠',source:'manual'},
+      {amount:328,category:'缇庡',date:'2026-05-05',note:'绮夊簳娑?,source:'manual'},
+      {amount:256,category:'瀹犵墿',date:'2026-05-06',note:'鐚伯+鐚爞',source:'manual'},
+      {amount:899,category:'鏈嶉グ',date:'2026-05-07',note:'浼樿。搴撴槬澶忚',source:'manual'},
+      {amount:28.50,category:'椁愰ギ',date:'2026-05-08',note:'鍜栧暋',source:'manual'},
+      {amount:168,category:'閫氳',date:'2026-05-09',note:'璇濊垂鍏呭€?,source:'manual'},
+      {amount:159,category:'濞变箰',date:'2026-05-10',note:'鐢靛奖绁?,source:'manual'},
+      {amount:66,category:'椁愰ギ',date:'2026-05-11',note:'鏅氶澶栧崠',source:'manual'},
+      {amount:38,category:'浜ら€?,date:'2026-05-12',note:'婊存淮鎵撹溅',source:'manual'},
+      {amount:198,category:'鏃ョ敤鍝?,date:'2026-05-13',note:'娲楄。娑?绾稿肪',source:'manual'},
+      {amount:420,category:'椁愰ギ',date:'2026-05-14',note:'璇峰鍚冮キ',source:'manual'},
+      {amount:75,category:'鍖荤枟',date:'2026-05-15',note:'鎰熷啋鑽?,source:'manual'},
+      {amount:58,category:'浜ら€?,date:'2026-05-16',note:'鍦伴搧鍏呭€?,source:'manual'},
+      {amount:320,category:'缇庡',date:'2026-02-10',note:'绮惧崕娑?,source:'manual'},
+      {amount:2980,category:'鎴跨',date:'2026-04-01',note:'4鏈堟埧绉?,source:'manual'},
+      {amount:176,category:'姘寸數璐?,date:'2026-04-03',note:'鐢佃垂',source:'manual'},
+      {amount:520,category:'椁愰ギ',date:'2026-04-15',note:'鑱氶',source:'manual'},
+      {amount:289,category:'瀹犵墿',date:'2026-04-20',note:'鐚伯',source:'manual'},
+    ];
+    samples.forEach((s,i)=>{store.records.push({id:1000+i,...s});});
+    store.budgets['2026-05']={amount:10000};
+    store.budgets['2026-04']={amount:9000};
+    saveStore(store);
+  }
+
+  const hash=window.location.hash.replace('#','');
+  if(hash&&document.getElementById('page-'+hash)) switchTab(hash);
+  else switchTab('home');
+
+  checkFocusMode();
+  renderHome();
+}
+
+document.addEventListener('DOMContentLoaded',init);
+
+// Close modals on overlay click
+document.querySelectorAll('.modal-overlay').forEach(o=>{o.addEventListener('click',function(e){if(e.target===o)hideModal(o.id);});});
+
+// Register service worker for PWA
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').catch(() => {});
+}
+</script>
+</body>
+</html>
